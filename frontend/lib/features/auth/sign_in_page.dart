@@ -1,7 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../data/remote/supabase_service.dart';
+
+import '../../data/remote/firebase_service.dart';
 
 class SignInPage extends ConsumerStatefulWidget {
   const SignInPage({super.key});
@@ -17,42 +18,64 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   String? _error;
 
   Future<void> _signIn() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final supabase = ref.read(supabaseProvider);
-      await supabase.auth.signInWithPassword(
+      final auth = ref.read(firebaseAuthProvider);
+      await auth.signInWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
-    } on AuthException catch (e) {
-      setState(() => _error = e.message);
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = e.message ?? 'Authentication failed.');
     } catch (e) {
       setState(() => _error = 'Unexpected error: $e');
     } finally {
-      if (mounted) setState(() { _loading = false; });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
   Future<void> _signUp() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final supabase = ref.read(supabaseProvider);
-      await supabase.auth.signUp(
+      final auth = ref.read(firebaseAuthProvider);
+      final credential = await auth.createUserWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
+      await credential.user?.sendEmailVerification();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Check your email to confirm account')),
+          const SnackBar(content: Text('Account created. Check your email to verify the address.')),
         );
       }
-    } on AuthException catch (e) {
-      setState(() => _error = e.message);
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = e.message ?? 'Could not create account.');
     } catch (e) {
       setState(() => _error = 'Unexpected error: $e');
     } finally {
-      if (mounted) setState(() { _loading = false; });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -85,7 +108,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                 ),
                 const SizedBox(height: 16),
                 if (_error != null)
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -93,7 +119,11 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       child: FilledButton(
                         onPressed: _loading ? null : _signIn,
                         child: _loading
-                            ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
                             : const Text('Sign in'),
                       ),
                     ),

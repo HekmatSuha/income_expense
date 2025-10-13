@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../data/remote/firebase_service.dart';
 import '../features/auth/sign_in_page.dart';
 import '../features/transactions/transactions_page.dart';
-import '../data/remote/supabase_service.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -14,17 +15,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     navigatorKey: _rootNavigatorKey,
     refreshListenable: _RouterRefreshStream(ref.watch(authStateChangesProvider.stream)),
     redirect: (context, state) {
-      final session = ref.read(sessionProvider);
-      final loggingIn = state.matchedLocation == "/login";
-      if (session == null) {
-        return loggingIn ? null : "/login";
+      final user = ref.read(firebaseUserProvider);
+      final loggingIn = state.matchedLocation == '/login';
+      if (user == null) {
+        return loggingIn ? null : '/login';
       } else {
-        return loggingIn ? "/" : null;
+        return loggingIn ? '/' : null;
       }
     },
     routes: [
-      GoRoute(path: "/login", builder: (ctx, st) => const SignInPage()),
-      GoRoute(path: "/", builder: (ctx, st) => const TransactionsPage()),
+      GoRoute(path: '/login', builder: (ctx, st) => const SignInPage()),
+      GoRoute(path: '/', builder: (ctx, st) => const TransactionsPage()),
     ],
   );
 });

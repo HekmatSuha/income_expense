@@ -1,41 +1,37 @@
-# Income–Expense Flutter Starter (Supabase + Drift, Offline-First)
+# Income–Expense Flutter Starter (Firebase + Drift, Offline-First)
 
 This is a production-ready starter scaffold for a mobile app that tracks income and expenses with **Flutter** (Android/iOS), using:
 
 - **Riverpod** for state management
 - **go_router** for navigation
 - **Drift (SQLite)** for fast local storage (offline-first)
-- **Supabase (PostgreSQL + Auth + Storage)** for sync & cloud features
+- **Firebase (Auth)** for sync & cloud features
 
 ## Quick Start
 
 1. **Create a Flutter project**
 ```bash
-flutter create income_expense_supabase
-cd income_expense_supabase
+flutter create income_expense_firebase
+cd income_expense_firebase
 ```
 
 2. **Replace files** with the contents of this starter:
 - Copy the `lib/`, `pubspec.yaml`, and `analysis_options.yaml` into your project root (overwrite existing).
-- Copy the `supabase/sql/` folder to keep your SQL migrations.
+- If you plan to add Firestore/Storage later, create a `/firebase/` folder (optional) to keep configuration notes.
 
 3. **Install packages**
 ```bash
 flutter pub get
 ```
 
-4. **Create a Supabase project**
-- Go to https://app.supabase.com/
-- Create a new project (choose a nearby region, e.g. eu-central-1 / Frankfurt).
-- In the SQL editor, run the SQL from `supabase/sql/schema.sql` then `supabase/sql/policies.sql`.
-- Get your project **URL** and **anon key** from Project Settings → API.
+4. **Create a Firebase project**
+- Go to https://console.firebase.google.com/
+- Create a new project and add the platforms you plan to target (Android, iOS, Web, etc.).
+- Enable Email/Password authentication in **Build → Authentication → Sign-in method**.
+- Create a web app (or use the FlutterFire CLI) and copy the configuration values (API key, app ID, etc.).
 
-5. **Set your Supabase keys**
-Edit `lib/app/secrets.dart` and paste:
-```dart
-const supabaseUrl = "<YOUR_SUPABASE_URL>";
-const supabaseAnonKey = "<YOUR_SUPABASE_ANON_KEY>";
-```
+5. **Set your Firebase configuration**
+Edit `lib/app/secrets.dart` and replace the placeholder values inside `firebaseOptions` with your Firebase project configuration.
 
 6. **Run the app**
 ```bash
@@ -43,17 +39,17 @@ flutter run -d android    # or -d ios, -d chrome
 ```
 
 ## Features in this starter
-- Email/password auth (Supabase)
+- Email/password auth (Firebase Auth)
 - Add/list income & expense transactions
 - Local DB (Drift) for instant UX even when offline
 - Basic repository pattern to later add bidirectional sync
 - Clean app structure prepared for charts, export, attachments
 
 ## Roadmap (next steps)
-- Implement sync (push/pull) between Drift and Supabase
+- Implement sync (push/pull) between Drift and Firestore
 - Add categories CRUD & filters
 - Add charts (weekly/monthly) with fl_chart
-- Add CSV export and receipt photo uploads (Supabase Storage)
+- Add CSV export and receipt photo uploads (Firebase Storage)
 - Multi-currency and localization (intl)
 
 Happy building! 🚀
