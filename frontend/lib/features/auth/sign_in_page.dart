@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/remote/firebase_service.dart';
+import 'auth_state.dart';
 
 class SignInPage extends ConsumerStatefulWidget {
   const SignInPage({super.key});
@@ -28,6 +30,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
+      ref.read(guestModeProvider.notifier).state = false;
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message ?? 'Authentication failed.');
     } catch (e) {
@@ -53,6 +56,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
         password: _passCtrl.text,
       );
       await credential.user?.sendEmailVerification();
+      ref.read(guestModeProvider.notifier).state = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Account created. Check your email to verify the address.')),
@@ -68,6 +72,13 @@ class _SignInPageState extends ConsumerState<SignInPage> {
           _loading = false;
         });
       }
+    }
+  }
+
+  void _continueOffline() {
+    ref.read(guestModeProvider.notifier).state = true;
+    if (mounted) {
+      context.go('/');
     }
   }
 
@@ -133,6 +144,11 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                 TextButton(
                   onPressed: _loading ? null : _signUp,
                   child: const Text('Create account'),
+                ),
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: _loading ? null : _continueOffline,
+                  child: const Text('Continue without an account'),
                 ),
               ],
             ),

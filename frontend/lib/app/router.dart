@@ -1,27 +1,34 @@
-import 'dart:async';
-
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/remote/firebase_service.dart';
+import '../features/auth/auth_state.dart';
 import '../features/auth/sign_in_page.dart';
 import '../features/transactions/transactions_page.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final refreshNotifier = _RouterRefresh(ref);
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    refreshListenable: _RouterRefreshStream(ref.watch(authStateChangesProvider.stream)),
+    refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final user = ref.read(firebaseUserProvider);
+      final guestMode = ref.read(guestModeProvider);
       final loggingIn = state.matchedLocation == '/login';
-      if (user == null) {
-        return loggingIn ? null : '/login';
-      } else {
+
+      if (guestMode) {
         return loggingIn ? '/' : null;
       }
+
+      if (user == null) {
+        return loggingIn ? null : '/login';
+      }
+
+      return loggingIn ? '/' : null;
     },
     routes: [
       GoRoute(path: '/login', builder: (ctx, st) => const SignInPage()),
@@ -30,18 +37,28 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _RouterRefreshStream extends ChangeNotifier {
-  _RouterRefreshStream(Stream<dynamic> stream) {
-    _subscription = stream.asBroadcastStream().listen((_) {
-      notifyListeners();
-    });
+class _RouterRefresh extends ChangeNotifier {
+  _RouterRefresh(this._ref) {
+    _authSub = _ref.listen<User?>(
+      firebaseUserProvider,
+      (_, __) => notifyListeners(),
+      fireImmediately: true,
+    );
+    _guestSub = _ref.listen<bool>(
+      guestModeProvider,
+      (_, __) => notifyListeners(),
+      fireImmediately: true,
+    );
   }
 
-  late final StreamSubscription<dynamic> _subscription;
+  final Ref _ref;
+  late final ProviderSubscription<User?> _authSub;
+  late final ProviderSubscription<bool> _guestSub;
 
   @override
   void dispose() {
-    _subscription.cancel();
+    _authSub.close();
+    _guestSub.close();
     super.dispose();
   }
 }
