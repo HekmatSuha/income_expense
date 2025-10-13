@@ -23,6 +23,9 @@ class Transactions extends Table {
   TextColumn get type => text()(); // 'income' | 'expense'
   RealColumn get amount => real()();
   TextColumn get note => text().nullable()();
+  TextColumn get paymentMethod => text().nullable()();
+  BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get reminderAt => dateTime().nullable()();
   DateTimeColumn get occurredAt => dateTime()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   @override
@@ -38,14 +41,32 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<Transaction>> allTransactions() => select(transactions).get();
 
-  Stream<List<Transaction>> watchTransactions() =>
-      (select(transactions)..orderBy([(t) => OrderingTerm.desc(t.occurredAt)])).watch();
+  Stream<List<Transaction>> watchTransactionsForUser(String userId) {
+    final query = select(transactions)
+      ..where((t) => t.userId.equals(userId))
+      ..orderBy([(t) => OrderingTerm.desc(t.occurredAt)]);
+    return query.watch();
+  }
+
+  Stream<List<Category>> watchCategoriesForUser(String userId) {
+    final query = select(categories)
+      ..where((c) => c.userId.equals(userId))
+      ..orderBy([(c) => OrderingTerm.asc(c.createdAt)]);
+    return query.watch();
+  }
+
+  Future<List<Category>> allCategoriesForUser(String userId) {
+    final query = select(categories)..where((c) => c.userId.equals(userId));
+    return query.get();
+  }
 
   Future<void> addTransaction(TransactionsCompanion data) =>
       into(transactions).insert(data);
 
   Future<void> deleteTransaction(String id) =>
       (delete(transactions)..where((t) => t.id.equals(id))).go();
+
+  Future<void> addCategory(CategoriesCompanion data) => into(categories).insert(data);
 }
 
 LazyDatabase _openDB() {

@@ -24,6 +24,9 @@ create table if not exists public.transactions (
   type text check (type in ('income','expense')) not null,
   amount numeric(14,2) not null,
   note text,
+  payment_method text,
+  is_recurring boolean default false,
+  reminder_at timestamptz,
   occurred_at date not null,
   created_at timestamptz default now()
 );

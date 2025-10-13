@@ -33,6 +33,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   lints: ^4.0.0
+  build_runner: ^2.4.11
+  drift_dev: ^2.20.2
 
 flutter:
   uses-material-design: true
