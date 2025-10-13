@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../data/remote/supabase_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../data/remote/firebase_service.dart';
 
 class SignInPage extends ConsumerStatefulWidget {
   const SignInPage({super.key});
@@ -19,12 +20,12 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   Future<void> _signIn() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final supabase = ref.read(supabaseProvider);
-      await supabase.auth.signInWithPassword(
+      final auth = ref.read(firebaseAuthProvider);
+      await auth.signInWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
-    } on AuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
       setState(() => _error = 'Unexpected error: $e');
@@ -36,17 +37,18 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   Future<void> _signUp() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final supabase = ref.read(supabaseProvider);
-      await supabase.auth.signUp(
+      final auth = ref.read(firebaseAuthProvider);
+      await auth.createUserWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
+      await auth.currentUser?.sendEmailVerification();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Check your email to confirm account')),
         );
       }
-    } on AuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
       setState(() => _error = 'Unexpected error: $e');

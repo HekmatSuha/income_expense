@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/local/app_database.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/tx_repository.dart';
-import '../../data/remote/supabase_service.dart';
+import '../../data/remote/firebase_service.dart';
 
 class Totals {
   final double income;
@@ -23,8 +23,8 @@ class TransactionListItem {
 }
 
 final currentUserIdProvider = Provider<String?>((ref) {
-  final session = ref.watch(sessionProvider);
-  return session?.user.id;
+  final user = ref.watch(firebaseUserProvider);
+  return user?.uid;
 });
 
 final categoryStreamProvider = StreamProvider.autoDispose<List<Category>>((ref) {

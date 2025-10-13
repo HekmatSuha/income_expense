@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/theme.dart';
 import 'app/router.dart';
-import 'data/remote/supabase_service.dart';
+import 'data/remote/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initSupabase();
+  await initFirebase();
   runApp(const ProviderScope(child: MyApp()));
 }
 

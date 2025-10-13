@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/sign_in_page.dart';
 import '../features/transactions/transactions_page.dart';
-import '../data/remote/supabase_service.dart';
+import '../data/remote/firebase_service.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -14,9 +14,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     navigatorKey: _rootNavigatorKey,
     refreshListenable: _RouterRefreshStream(ref.watch(authStateChangesProvider.stream)),
     redirect: (context, state) {
-      final session = ref.read(sessionProvider);
+      final user = ref.read(firebaseUserProvider);
       final loggingIn = state.matchedLocation == "/login";
-      if (session == null) {
+      if (user == null) {
         return loggingIn ? null : "/login";
       } else {
         return loggingIn ? "/" : null;
