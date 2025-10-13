@@ -8,7 +8,8 @@ class TxRepository {
   final AppDatabase db;
   TxRepository(this.db);
 
-  Stream<List<Transaction>> watch() => db.watchTransactions();
+  Stream<List<Transaction>> watch(String userId) =>
+      db.watchTransactionsForUser(userId);
 
   Future<void> add({
     required String userId,
@@ -16,6 +17,9 @@ class TxRepository {
     required double amount,
     String? categoryId,
     String? note,
+    String? paymentMethod,
+    bool isRecurring = false,
+    DateTime? reminderAt,
     required DateTime occurredAt,
   }) async {
     await db.addTransaction(TransactionsCompanion.insert(
@@ -25,6 +29,9 @@ class TxRepository {
       amount: amount,
       categoryId: Value(categoryId),
       note: Value(note),
+      paymentMethod: Value(paymentMethod),
+      isRecurring: Value(isRecurring),
+      reminderAt: Value(reminderAt),
       occurredAt: occurredAt,
     ));
   }
