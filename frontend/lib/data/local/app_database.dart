@@ -73,7 +73,7 @@ LazyDatabase _openDB() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
     final file = File(p.join(dir.path, 'app.db'));
-    final sqflite = SqfliteQueryExecutor(databasePath: file.path);
+    final sqflite = SqfliteQueryExecutor(path: file.path);
     return sqflite;
   });
 }
