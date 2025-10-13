@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/local/app_database.dart';
+import '../../data/remote/firebase_service.dart';
 import '../../data/repositories/tx_repository.dart';
+import '../auth/auth_state.dart';
 import 'tx_controller.dart';
 
 class TransactionsPage extends ConsumerWidget {
@@ -18,8 +20,25 @@ class TransactionsPage extends ConsumerWidget {
     final budget = ref.watch(monthlyBudgetProvider);
     final userId = ref.watch(currentUserIdProvider);
 
+    final guestMode = ref.watch(guestModeProvider);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Income & Expense')),
+      appBar: AppBar(
+        title: const Text('Income & Expense'),
+        actions: [
+          IconButton(
+            tooltip: guestMode ? 'Return to login' : 'Sign out',
+            onPressed: () async {
+              if (guestMode) {
+                ref.read(guestModeProvider.notifier).state = false;
+              } else {
+                await ref.read(firebaseAuthProvider).signOut();
+              }
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: userId == null
             ? null
@@ -52,6 +71,8 @@ class TransactionsPage extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (guestMode) const _GuestModeBanner(),
+                      if (guestMode) const SizedBox(height: 16),
                       _QuickActions(
                         onAddIncome: userId == null
                             ? null
@@ -427,6 +448,34 @@ class TransactionsPage extends ConsumerWidget {
 
     amountCtrl.dispose();
     noteCtrl.dispose();
+  }
+}
+
+class _GuestModeBanner extends StatelessWidget {
+  const _GuestModeBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.orange.shade50,
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.orange),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'You are exploring the app without signing in. '
+                'Your data stays on this device until you create an account.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
