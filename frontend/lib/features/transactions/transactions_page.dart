@@ -659,13 +659,20 @@ class _QuickActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
 
     final disabled = onTap == null;
+    final backgroundColor =
+        disabled ? color.withOpacity(0.12) : color; // Ensure contrast.
+    final borderColor =
+        disabled ? color.withOpacity(0.4) : Colors.transparent;
+    final foregroundColor =
+        disabled ? color.withOpacity(0.9) : Colors.white;
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: disabled ? null : onTap,
       child: Ink(
         height: 132,
         decoration: BoxDecoration(
-          color: disabled ? color.withOpacity(0.45) : color,
+          color: backgroundColor,
+          border: Border.all(color: borderColor, width: 2),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
@@ -678,13 +685,13 @@ class _QuickActionCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 34),
+            Icon(icon, color: foregroundColor, size: 34),
             const SizedBox(height: 12),
             Text(
               label,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
+                    color: foregroundColor,
                     fontWeight: FontWeight.w700,
                   ),
             ),
