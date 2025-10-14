@@ -496,25 +496,25 @@ class _QuickActions extends StatelessWidget {
       children: [
         _ActionChip(
           label: 'Add income',
-          icon: Icons.trending_up,
+          icon: Icons.add,
           color: Colors.teal,
           onTap: onAddIncome,
         ),
         _ActionChip(
           label: 'Add expense',
-          icon: Icons.trending_down,
+          icon: Icons.remove,
           color: Colors.redAccent,
           onTap: onAddExpense,
         ),
         _ActionChip(
           label: 'Transfer',
-          icon: Icons.compare_arrows,
+          icon: Icons.sync_alt,
           color: Colors.orange,
           onTap: null,
         ),
         _ActionChip(
           label: 'Transactions',
-          icon: Icons.list_alt,
+          icon: Icons.receipt_long,
           color: Colors.blueGrey,
           onTap: null,
         ),
@@ -539,23 +539,35 @@ class _ActionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(12),
+      color: color,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(color: color, fontWeight: FontWeight.w600),
-              ),
-            ],
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 140),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 28),
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ) ??
+                      const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),
