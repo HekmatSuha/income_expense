@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/router.dart';
 import 'app/theme.dart';
 import 'data/remote/firebase_service.dart';
+import 'data/sync/sync_bootstrapper.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,7 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(syncBootstrapperProvider);
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Income Expense',
