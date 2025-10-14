@@ -99,5 +99,65 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> addCategory(CategoriesCompanion data) => into(categories).insert(data);
 
+  Future<void> updateCategory(
+    String id, {
+    String? name,
+    String? type,
+  }) async {
+    final companion = CategoriesCompanion(
+      name: name == null ? const Value.absent() : Value(name),
+      type: type == null ? const Value.absent() : Value(type),
+    );
+    await (update(categories)..where((c) => c.id.equals(id))).write(companion);
+  }
+
+  Future<void> deleteCategory(String id) =>
+      (delete(categories)..where((c) => c.id.equals(id))).go();
+
+  Future<int> countTransactionsWithCategory(String categoryId) async {
+    final query = select(transactions)..where((t) => t.categoryId.equals(categoryId));
+    final results = await query.get();
+    return results.length;
+  }
+
+  Future<void> reassignTransactionsCategory({
+    required String fromCategoryId,
+    String? toCategoryId,
+  }) async {
+    final updateQuery = update(transactions)
+      ..where((t) => t.categoryId.equals(fromCategoryId));
+    await updateQuery.write(TransactionsCompanion(categoryId: Value(toCategoryId)));
+  }
+
   Future<void> addAccount(AccountsCompanion data) => into(accounts).insert(data);
+
+  Future<void> updateAccount(
+    String id, {
+    String? name,
+    String? type,
+  }) async {
+    final companion = AccountsCompanion(
+      name: name == null ? const Value.absent() : Value(name),
+      type: type == null ? const Value.absent() : Value(type),
+    );
+    await (update(accounts)..where((a) => a.id.equals(id))).write(companion);
+  }
+
+  Future<void> deleteAccount(String id) =>
+      (delete(accounts)..where((a) => a.id.equals(id))).go();
+
+  Future<int> countTransactionsWithAccount(String accountId) async {
+    final query = select(transactions)..where((t) => t.accountId.equals(accountId));
+    final results = await query.get();
+    return results.length;
+  }
+
+  Future<void> reassignTransactionsAccount({
+    required String fromAccountId,
+    required String toAccountId,
+  }) async {
+    final updateQuery = update(transactions)
+      ..where((t) => t.accountId.equals(fromAccountId));
+    await updateQuery.write(TransactionsCompanion(accountId: Value(toAccountId)));
+  }
 }

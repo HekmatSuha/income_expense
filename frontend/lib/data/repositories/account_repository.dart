@@ -13,6 +13,34 @@ class AccountRepository {
 
   Future<List<Account>> allForUser(String userId) => db.allAccountsForUser(userId);
 
+  Future<void> update({
+    required String id,
+    String? name,
+    String? type,
+  }) async {
+    await db.updateAccount(id, name: name, type: type);
+  }
+
+  Future<void> delete({
+    required String id,
+    String? reassignToAccountId,
+  }) async {
+    final usage = await db.countTransactionsWithAccount(id);
+    if (usage > 0) {
+      if (reassignToAccountId == null) {
+        throw AccountInUseException(usage);
+      }
+      if (reassignToAccountId == id) {
+        throw ArgumentError('Cannot reassign account to itself.');
+      }
+      await db.reassignTransactionsAccount(
+        fromAccountId: id,
+        toAccountId: reassignToAccountId,
+      );
+    }
+    await db.deleteAccount(id);
+  }
+
   Future<void> add({
     required String userId,
     required String name,
@@ -41,6 +69,16 @@ class AccountRepository {
       await add(userId: userId, name: entry.$1, type: entry.$2);
     }
   }
+}
+
+class AccountInUseException implements Exception {
+  AccountInUseException(this.transactionCount);
+
+  final int transactionCount;
+
+  @override
+  String toString() =>
+      'Account cannot be deleted because it is used by $transactionCount transactions';
 }
 
 final accountRepositoryProvider = Provider<AccountRepository>((ref) {

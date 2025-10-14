@@ -15,6 +15,42 @@ class CategoryRepository {
   Future<List<Category>> allForUser(String userId) =>
       db.allCategoriesForUser(userId);
 
+  Future<void> update({
+    required String id,
+    String? name,
+    String? type,
+  }) async {
+    await db.updateCategory(id, name: name, type: type);
+  }
+
+  Future<void> delete({
+    required String id,
+    String? reassignToCategoryId,
+    bool setTransactionsToNull = false,
+  }) async {
+    final usage = await db.countTransactionsWithCategory(id);
+    if (usage > 0) {
+      if (!setTransactionsToNull && reassignToCategoryId == null) {
+        throw CategoryInUseException(usage);
+      }
+      if (reassignToCategoryId != null) {
+        if (reassignToCategoryId == id) {
+          throw ArgumentError('Cannot reassign category to itself.');
+        }
+        await db.reassignTransactionsCategory(
+          fromCategoryId: id,
+          toCategoryId: reassignToCategoryId,
+        );
+      } else if (setTransactionsToNull) {
+        await db.reassignTransactionsCategory(
+          fromCategoryId: id,
+          toCategoryId: null,
+        );
+      }
+    }
+    await db.deleteCategory(id);
+  }
+
   Future<void> add({
     required String userId,
     required String name,
@@ -61,6 +97,16 @@ class CategoryRepository {
       }
     }
   }
+}
+
+class CategoryInUseException implements Exception {
+  CategoryInUseException(this.transactionCount);
+
+  final int transactionCount;
+
+  @override
+  String toString() =>
+      'Category cannot be deleted because it is used by $transactionCount transactions';
 }
 
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {

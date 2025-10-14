@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../data/local/app_database.dart';
 import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/tx_repository.dart';
+import 'manage_accounts.dart';
+import 'manage_categories.dart';
 import 'tx_controller.dart';
 
 final homeNavIndexProvider = StateProvider<int>((ref) => 0);
@@ -224,6 +226,43 @@ class TransactionsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(navIndex == 0 ? 'Income & Expense' : 'Accounts'),
+        actions: [
+          if (userId != null)
+            PopupMenuButton<String>(
+              onSelected: (value) async {
+                switch (value) {
+                  case 'manage_categories':
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CategoryManagementPage(),
+                      ),
+                    );
+                    ref.invalidate(categoryStreamProvider);
+                    ref.invalidate(txStreamProvider);
+                    break;
+                  case 'manage_accounts':
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AccountManagementPage(),
+                      ),
+                    );
+                    ref.invalidate(accountStreamProvider);
+                    ref.invalidate(txStreamProvider);
+                    break;
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'manage_categories',
+                  child: Text('Manage categories'),
+                ),
+                PopupMenuItem(
+                  value: 'manage_accounts',
+                  child: Text('Manage accounts'),
+                ),
+              ],
+            ),
+        ],
       ),
       body: body,
       floatingActionButton: floatingActionButton,
