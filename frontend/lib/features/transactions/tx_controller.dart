@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/local/app_database.dart';
 import '../../data/repositories/category_repository.dart';
+import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/tx_repository.dart';
 import '../auth/auth_state.dart';
 
@@ -13,10 +14,15 @@ class Totals {
 }
 
 class TransactionListItem {
-  const TransactionListItem({required this.transaction, this.category});
+  const TransactionListItem({
+    required this.transaction,
+    this.category,
+    this.account,
+  });
 
   final Transaction transaction;
   final Category? category;
+  final Account? account;
 
   bool get isIncome => transaction.type == 'income';
   bool get isRecurring => transaction.isRecurring;
@@ -34,6 +40,14 @@ final categoryStreamProvider = StreamProvider.autoDispose<List<Category>>((ref) 
   return ref.watch(categoryRepositoryProvider).watch(userId);
 });
 
+final accountStreamProvider = StreamProvider.autoDispose<List<Account>>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) {
+    return const Stream<List<Account>>.empty();
+  }
+  return ref.watch(accountRepositoryProvider).watch(userId);
+});
+
 final txStreamProvider = StreamProvider.autoDispose<List<Transaction>>((ref) {
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) {
@@ -45,9 +59,11 @@ final txStreamProvider = StreamProvider.autoDispose<List<Transaction>>((ref) {
 final txItemsProvider = Provider<AsyncValue<List<TransactionListItem>>>((ref) {
   final txs = ref.watch(txStreamProvider);
   final categories = ref.watch(categoryStreamProvider);
+  final accounts = ref.watch(accountStreamProvider);
 
   if (txs is AsyncLoading<List<Transaction>> ||
-      categories is AsyncLoading<List<Category>>) {
+      categories is AsyncLoading<List<Category>> ||
+      accounts is AsyncLoading<List<Account>>) {
     return const AsyncLoading<List<TransactionListItem>>();
   }
   if (txs is AsyncError<List<Transaction>>) {
@@ -56,14 +72,20 @@ final txItemsProvider = Provider<AsyncValue<List<TransactionListItem>>>((ref) {
   if (categories is AsyncError<List<Category>>) {
     return AsyncError<List<TransactionListItem>>(categories.error, categories.stackTrace);
   }
+  if (accounts is AsyncError<List<Account>>) {
+    return AsyncError<List<TransactionListItem>>(accounts.error, accounts.stackTrace);
+  }
 
   final txList = (txs as AsyncData<List<Transaction>>).value;
   final categoryList = (categories as AsyncData<List<Category>>).value;
+  final accountList = (accounts as AsyncData<List<Account>>).value;
   final categoryMap = {for (final c in categoryList) c.id: c};
+  final accountMap = {for (final a in accountList) a.id: a};
   final items = txList
       .map((t) => TransactionListItem(
             transaction: t,
             category: t.categoryId == null ? null : categoryMap[t.categoryId!],
+            account: t.accountId == null ? null : accountMap[t.accountId!],
           ))
       .toList();
   return AsyncData(items);
@@ -111,4 +133,10 @@ final ensureDefaultCategoriesProvider = FutureProvider.autoDispose<void>((ref) a
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) return;
   await ref.watch(categoryRepositoryProvider).ensureDefaults(userId);
+});
+
+final ensureDefaultAccountsProvider = FutureProvider.autoDispose<void>((ref) async {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return;
+  await ref.watch(accountRepositoryProvider).ensureDefaults(userId);
 });

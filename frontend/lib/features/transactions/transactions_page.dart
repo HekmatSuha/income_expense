@@ -12,8 +12,10 @@ class TransactionsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(ensureDefaultCategoriesProvider);
+    ref.watch(ensureDefaultAccountsProvider);
     final txItems = ref.watch(txItemsProvider);
     final categoriesAsync = ref.watch(categoryStreamProvider);
+    final accountsAsync = ref.watch(accountStreamProvider);
     final totals = ref.watch(totalsProvider);
     final budget = ref.watch(monthlyBudgetProvider);
     final userId = ref.watch(currentUserIdProvider);
@@ -29,6 +31,11 @@ class TransactionsPage extends ConsumerWidget {
                       orElse: () => null,
                     ) ??
                     [];
+                final accounts = ref.read(accountStreamProvider).maybeWhen(
+                      data: (value) => value,
+                      orElse: () => null,
+                    ) ??
+                    [];
                 if (categories.isEmpty) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -37,7 +44,15 @@ class TransactionsPage extends ConsumerWidget {
                   }
                   return;
                 }
-                await _openAddSheet(context, ref, userId, categories);
+                if (accounts.isEmpty) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Add an account before creating transactions.')),
+                    );
+                  }
+                  return;
+                }
+                await _openAddSheet(context, ref, userId, categories, accounts);
               },
         icon: const Icon(Icons.add),
         label: const Text('Add'),
@@ -55,10 +70,24 @@ class TransactionsPage extends ConsumerWidget {
                       _QuickActions(
                         onAddIncome: userId == null
                             ? null
-                            : () => _handleQuickAdd(context, ref, userId, categoriesAsync, 'income'),
+                            : () => _handleQuickAdd(
+                                  context,
+                                  ref,
+                                  userId,
+                                  categoriesAsync,
+                                  accountsAsync,
+                                  'income',
+                                ),
                         onAddExpense: userId == null
                             ? null
-                            : () => _handleQuickAdd(context, ref, userId, categoriesAsync, 'expense'),
+                            : () => _handleQuickAdd(
+                                  context,
+                                  ref,
+                                  userId,
+                                  categoriesAsync,
+                                  accountsAsync,
+                                  'expense',
+                                ),
                       ),
                       const SizedBox(height: 16),
                       _SummaryRow(totals: totals),
@@ -89,6 +118,7 @@ class TransactionsPage extends ConsumerWidget {
                     final color = item.isIncome ? Colors.teal : Colors.redAccent;
                     final sign = item.isIncome ? '+' : '-';
                     final categoryLabel = item.category?.name ?? (item.isIncome ? 'Income' : 'Expense');
+                    final accountLabel = item.account?.name ?? 'Unassigned';
                     return Dismissible(
                       key: ValueKey(t.id),
                       background: Container(color: Colors.redAccent.withOpacity(0.2)),
@@ -121,6 +151,10 @@ class TransactionsPage extends ConsumerWidget {
                               spacing: 8,
                               runSpacing: 4,
                               children: [
+                                Chip(
+                                  label: Text(accountLabel),
+                                  avatar: const Icon(Icons.account_balance, size: 18),
+                                ),
                                 if ((t.paymentMethod ?? '').isNotEmpty)
                                   Chip(
                                     label: Text(t.paymentMethod!),
@@ -167,6 +201,7 @@ class TransactionsPage extends ConsumerWidget {
     WidgetRef ref,
     String userId,
     AsyncValue<List<Category>> categoriesAsync,
+    AsyncValue<List<Account>> accountsAsync,
     String type,
   ) async {
     final categories = categoriesAsync.maybeWhen(data: (value) => value, orElse: () => <Category>[]);
@@ -179,14 +214,24 @@ class TransactionsPage extends ConsumerWidget {
       }
       return;
     }
-    await _openAddSheet(context, ref, userId, categories, initialType: type);
+    final accounts = accountsAsync.maybeWhen(data: (value) => value, orElse: () => <Account>[]);
+    if (accounts.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Add an account before creating transactions.')),
+        );
+      }
+      return;
+    }
+    await _openAddSheet(context, ref, userId, categories, accounts, initialType: type);
   }
 
   Future<void> _openAddSheet(
     BuildContext context,
     WidgetRef ref,
     String userId,
-    List<Category> categories, {
+    List<Category> categories,
+    List<Account> accounts, {
     String initialType = 'expense',
   }) async {
     final formKey = GlobalKey<FormState>();
@@ -195,6 +240,7 @@ class TransactionsPage extends ConsumerWidget {
     String type = initialType;
     String paymentMethod = 'Cash';
     String? categoryId = categories.where((c) => c.type == type).map((c) => c.id).firstOrNull;
+    String? accountId = accounts.firstOrNull?.id;
     bool isRecurring = false;
     DateTime date = DateTime.now();
     DateTime? reminderAt;
@@ -212,6 +258,7 @@ class TransactionsPage extends ConsumerWidget {
               if (categoryId == null && filtered.isNotEmpty) {
                 categoryId = filtered.first.id;
               }
+              accountId ??= accounts.firstOrNull?.id;
               return Form(
                 key: formKey,
                 child: SingleChildScrollView(
@@ -282,6 +329,29 @@ class TransactionsPage extends ConsumerWidget {
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Select a category';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: accountId,
+                        items: accounts
+                            .map(
+                              (a) => DropdownMenuItem(
+                                value: a.id,
+                                child: Text(a.name),
+                              ),
+                            )
+                            .toList(),
+                        decoration: const InputDecoration(
+                          labelText: 'Account',
+                          prefixIcon: Icon(Icons.account_balance),
+                        ),
+                        onChanged: (value) => setState(() => accountId = value),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Select an account';
                           }
                           return null;
                         },
@@ -397,19 +467,20 @@ class TransactionsPage extends ConsumerWidget {
                         width: double.infinity,
                         child: FilledButton(
                           onPressed: () async {
-                            if (!formKey.currentState!.validate()) return;
-                            final amount = double.parse(amountCtrl.text);
-                            await ref.read(txRepositoryProvider).add(
-                                  userId: userId,
-                                  type: type,
-                                  amount: amount,
-                                  categoryId: categoryId,
-                                  note: noteCtrl.text.isEmpty ? null : noteCtrl.text,
-                                  paymentMethod: paymentMethod,
-                                  isRecurring: isRecurring,
-                                  reminderAt: reminderAt,
-                                  occurredAt: date,
-                                );
+                          if (!formKey.currentState!.validate()) return;
+                          final amount = double.parse(amountCtrl.text);
+                          await ref.read(txRepositoryProvider).add(
+                                userId: userId,
+                                type: type,
+                                amount: amount,
+                                accountId: accountId!,
+                                categoryId: categoryId,
+                                note: noteCtrl.text.isEmpty ? null : noteCtrl.text,
+                                paymentMethod: paymentMethod,
+                                isRecurring: isRecurring,
+                                reminderAt: reminderAt,
+                                occurredAt: date,
+                              );
                             if (context.mounted) Navigator.pop(ctx);
                           },
                           child: const Text('Save transaction'),
