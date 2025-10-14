@@ -88,6 +88,9 @@ class TxRepository {
     String? paymentMethod,
     bool isRecurring = false,
     DateTime? reminderAt,
+    String? recurrenceFrequency,
+    DateTime? nextOccurrence,
+    bool recurrencePaused = false,
     required DateTime occurredAt,
   }) async {
     final id = const Uuid().v4();
@@ -108,6 +111,13 @@ class TxRepository {
       isRecurring: Value(isRecurring),
       reminderAt:
           reminderAt == null ? const Value.absent() : Value(reminderAt),
+      recurrenceFrequency: recurrenceFrequency == null
+          ? const Value.absent()
+          : Value(recurrenceFrequency),
+      nextOccurrence: nextOccurrence == null
+          ? const Value.absent()
+          : Value(nextOccurrence),
+      recurrencePaused: Value(recurrencePaused),
     );
 
     await db.upsertTransaction(companion);
@@ -126,10 +136,76 @@ class TxRepository {
           paymentMethod: paymentMethod,
           isRecurring: isRecurring,
           reminderAt: reminderAt,
+          recurrenceFrequency: recurrenceFrequency,
+          nextOccurrence: nextOccurrence,
+          recurrencePaused: recurrencePaused,
           occurredAt: occurredAt,
           createdAt: now,
         ),
       );
+    }
+  }
+
+  Future<Transaction> updateRecurringTemplate(
+    Transaction template, {
+    String? recurrenceFrequency,
+    DateTime? nextOccurrence,
+    bool? recurrencePaused,
+    DateTime? reminderAt,
+  }) async {
+    final companion = TransactionsCompanion(
+      recurrenceFrequency: recurrenceFrequency == null
+          ? const Value.absent()
+          : Value(recurrenceFrequency),
+      nextOccurrence: nextOccurrence == null
+          ? const Value.absent()
+          : Value(nextOccurrence),
+      recurrencePaused: recurrencePaused == null
+          ? const Value.absent()
+          : Value(recurrencePaused),
+      reminderAt:
+          reminderAt == null ? const Value.absent() : Value(reminderAt),
+    );
+
+    await db.updateTransactionFields(template.id, companion);
+
+    final updated = template.copyWith(
+      recurrenceFrequency: recurrenceFrequency ?? template.recurrenceFrequency,
+      nextOccurrence: nextOccurrence ?? template.nextOccurrence,
+      recurrencePaused: recurrencePaused ?? template.recurrencePaused,
+      reminderAt: reminderAt ?? template.reminderAt,
+    );
+
+    if (_shouldSyncRemote(template.userId)) {
+      _pendingUpserts.add(template.id);
+      await remote.upsert(RemoteTransactionRecord.fromTransaction(updated));
+    }
+
+    return updated;
+  }
+
+  Future<void> cancelRecurringTemplate(Transaction template) async {
+    final companion = TransactionsCompanion(
+      isRecurring: const Value(false),
+      recurrenceFrequency: const Value<String?>(null),
+      nextOccurrence: const Value<DateTime?>(null),
+      recurrencePaused: const Value(false),
+      reminderAt: const Value<DateTime?>(null),
+    );
+
+    await db.updateTransactionFields(template.id, companion);
+
+    final updated = template.copyWith(
+      isRecurring: false,
+      recurrenceFrequency: null,
+      nextOccurrence: null,
+      recurrencePaused: false,
+      reminderAt: null,
+    );
+
+    if (_shouldSyncRemote(template.userId)) {
+      _pendingUpserts.add(template.id);
+      await remote.upsert(RemoteTransactionRecord.fromTransaction(updated));
     }
   }
 

@@ -19,6 +19,9 @@ class RemoteTransactionRecord {
     this.paymentMethod,
     this.isRecurring = false,
     this.reminderAt,
+    this.recurrenceFrequency,
+    this.nextOccurrence,
+    this.recurrencePaused = false,
   });
 
   final String id;
@@ -33,6 +36,9 @@ class RemoteTransactionRecord {
   final String? paymentMethod;
   final bool isRecurring;
   final DateTime? reminderAt;
+  final String? recurrenceFrequency;
+  final DateTime? nextOccurrence;
+  final bool recurrencePaused;
 
   TransactionsCompanion toCompanion() {
     return TransactionsCompanion(
@@ -51,6 +57,13 @@ class RemoteTransactionRecord {
       isRecurring: Value(isRecurring),
       reminderAt:
           reminderAt == null ? const Value.absent() : Value(reminderAt!),
+      recurrenceFrequency: recurrenceFrequency == null
+          ? const Value.absent()
+          : Value(recurrenceFrequency!),
+      nextOccurrence: nextOccurrence == null
+          ? const Value.absent()
+          : Value(nextOccurrence!),
+      recurrencePaused: Value(recurrencePaused),
     );
   }
 
@@ -65,9 +78,32 @@ class RemoteTransactionRecord {
       'paymentMethod': paymentMethod,
       'isRecurring': isRecurring,
       'reminderAt': reminderAt,
+      'recurrenceFrequency': recurrenceFrequency,
+      'nextOccurrence': nextOccurrence,
+      'recurrencePaused': recurrencePaused,
       'occurredAt': occurredAt,
       'createdAt': createdAt,
     };
+  }
+
+  factory RemoteTransactionRecord.fromTransaction(Transaction transaction) {
+    return RemoteTransactionRecord(
+      id: transaction.id,
+      userId: transaction.userId,
+      type: transaction.type,
+      amount: transaction.amount,
+      categoryId: transaction.categoryId,
+      accountId: transaction.accountId,
+      note: transaction.note,
+      paymentMethod: transaction.paymentMethod,
+      isRecurring: transaction.isRecurring,
+      reminderAt: transaction.reminderAt,
+      recurrenceFrequency: transaction.recurrenceFrequency,
+      nextOccurrence: transaction.nextOccurrence,
+      recurrencePaused: transaction.recurrencePaused,
+      occurredAt: transaction.occurredAt,
+      createdAt: transaction.createdAt,
+    );
   }
 
   static RemoteTransactionRecord fromSnapshot(
@@ -77,6 +113,7 @@ class RemoteTransactionRecord {
     final occurredAtRaw = data['occurredAt'];
     final createdAtRaw = data['createdAt'];
     final reminderRaw = data['reminderAt'];
+    final nextRaw = data['nextOccurrence'];
     return RemoteTransactionRecord(
       id: snapshot.id,
       userId: data['userId'] as String,
@@ -90,6 +127,11 @@ class RemoteTransactionRecord {
       reminderAt: reminderRaw is Timestamp
           ? reminderRaw.toDate()
           : (reminderRaw as DateTime?),
+      recurrenceFrequency: data['recurrenceFrequency'] as String?,
+      nextOccurrence: nextRaw is Timestamp
+          ? nextRaw.toDate()
+          : (nextRaw as DateTime?),
+      recurrencePaused: (data['recurrencePaused'] as bool?) ?? false,
       occurredAt: occurredAtRaw is Timestamp
           ? occurredAtRaw.toDate()
           : (occurredAtRaw as DateTime? ?? DateTime.now().toUtc()),

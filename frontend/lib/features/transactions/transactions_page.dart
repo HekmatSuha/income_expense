@@ -7,6 +7,7 @@ import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/tx_repository.dart';
 import 'manage_accounts.dart';
 import 'manage_categories.dart';
+import 'recurrence.dart';
 import 'tx_controller.dart';
 
 final homeNavIndexProvider = StateProvider<int>((ref) => 0);
@@ -213,6 +214,63 @@ class TransactionsPage extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
         ),
       );
+    } else if (navIndex == 1) {
+      final recurringAsync = ref.watch(recurringItemsProvider);
+      floatingActionButton = userId == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () async {
+                final categories = ref.read(categoryStreamProvider).maybeWhen(
+                      data: (value) => value,
+                      orElse: () => null,
+                    ) ??
+                    [];
+                final accounts = ref.read(accountStreamProvider).maybeWhen(
+                      data: (value) => value,
+                      orElse: () => null,
+                    ) ??
+                    [];
+                if (categories.isEmpty) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                              Text('Add a category before creating recurring transactions.')),
+                    );
+                  }
+                  return;
+                }
+                if (accounts.isEmpty) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'Add an account before creating recurring transactions.')),
+                    );
+                  }
+                  return;
+                }
+                await _openAddSheet(
+                  context,
+                  ref,
+                  userId,
+                  categories,
+                  accounts,
+                  forceRecurring: true,
+                );
+              },
+              icon: const Icon(Icons.autorenew),
+              label: const Text('Add recurring'),
+            );
+
+      body = SafeArea(
+        child: _RecurringTab(
+          itemsAsync: recurringAsync,
+          onEdit: (item) => _openRecurringEditor(context, ref, item),
+          onTogglePause: (item) => _toggleRecurringPause(context, ref, item),
+          onCancel: (item) => _cancelRecurringSchedule(context, ref, item),
+        ),
+      );
     } else {
       final accountsAsync = ref.watch(accountStreamProvider);
       floatingActionButton = userId == null
@@ -230,9 +288,18 @@ class TransactionsPage extends ConsumerWidget {
       );
     }
 
+    String appBarTitle;
+    if (navIndex == 0) {
+      appBarTitle = 'Income & Expense';
+    } else if (navIndex == 1) {
+      appBarTitle = 'Recurring schedules';
+    } else {
+      appBarTitle = 'Accounts';
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(navIndex == 0 ? 'Income & Expense' : 'Accounts'),
+        title: Text(appBarTitle),
         actions: [
           if (userId != null)
             PopupMenuButton<String>(
@@ -275,19 +342,7 @@ class TransactionsPage extends ConsumerWidget {
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: NavigationBar(
         selectedIndex: navIndex,
-        onDestinationSelected: (index) async {
-          if (index == 2) {
-            if (userId == null) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Sign in to manage accounts.')),
-                );
-              }
-              return;
-            }
-            await _showAddAccountDialog(context, ref, userId);
-            return;
-          }
+        onDestinationSelected: (index) {
           ref.read(homeNavIndexProvider.notifier).state = index;
         },
         destinations: const [
@@ -297,14 +352,14 @@ class TransactionsPage extends ConsumerWidget {
             label: 'Transactions',
           ),
           NavigationDestination(
+            icon: Icon(Icons.autorenew_outlined),
+            selectedIcon: Icon(Icons.autorenew),
+            label: 'Recurring',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet),
             label: 'Accounts',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.add_card_outlined),
-            selectedIcon: Icon(Icons.add_card),
-            label: 'Add account',
           ),
         ],
       ),
@@ -348,18 +403,29 @@ class TransactionsPage extends ConsumerWidget {
     List<Category> categories,
     List<Account> accounts, {
     String initialType = 'expense',
+    bool forceRecurring = false,
+    RecurrenceFrequency initialFrequency = RecurrenceFrequency.monthly,
   }) async {
     final formKey = GlobalKey<FormState>();
     final amountCtrl = TextEditingController();
     final noteCtrl = TextEditingController();
     String type = initialType;
     String paymentMethod = 'Cash';
-    String? categoryId = categories.where((c) => c.type == type).map((c) => c.id).firstOrNull;
+    String? categoryId =
+        categories.where((c) => c.type == type).map((c) => c.id).firstOrNull;
     var availableAccounts = List<Account>.from(accounts);
     String? accountId = availableAccounts.firstOrNull?.id;
-    bool isRecurring = false;
+    bool isRecurring = forceRecurring;
+    RecurrenceFrequency frequency = initialFrequency;
     DateTime date = DateTime.now();
-    DateTime? reminderAt;
+    DateTime? nextOccurrence = isRecurring ? frequency.addTo(date) : null;
+    DateTime? reminderAt = nextOccurrence;
+    bool reminderManuallySet = false;
+    String? recurrenceError;
+
+    DateTime computeNext(DateTime base, RecurrenceFrequency freq) {
+      return freq.addTo(base);
+    }
 
     await showModalBottomSheet(
       context: context,
@@ -405,8 +471,10 @@ class TransactionsPage extends ConsumerWidget {
                         onSelectionChanged: (selection) {
                           setState(() {
                             type = selection.first;
-                            final filteredCats = categories.where((c) => c.type == type).toList();
-                            categoryId = filteredCats.isEmpty ? null : filteredCats.first.id;
+                            final filteredCats =
+                                categories.where((c) => c.type == type).toList();
+                            categoryId =
+                                filteredCats.isEmpty ? null : filteredCats.first.id;
                           });
                         },
                       ),
@@ -417,7 +485,8 @@ class TransactionsPage extends ConsumerWidget {
                           labelText: 'Amount',
                           prefixIcon: Icon(Icons.payments),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
                         validator: (value) {
                           final amount = double.tryParse(value ?? '');
                           if (amount == null || amount <= 0) {
@@ -477,12 +546,14 @@ class TransactionsPage extends ConsumerWidget {
                         child: TextButton.icon(
                           onPressed: () async {
                             await _showAddAccountDialog(context, ref, userId);
-                            final latest = await ref.read(accountRepositoryProvider).allForUser(userId);
+                            final latest =
+                                await ref.read(accountRepositoryProvider).allForUser(userId);
                             if (!ctx.mounted) return;
                             final previousLength = availableAccounts.length;
                             setState(() {
                               availableAccounts = latest;
-                              final selectedExists = latest.any((a) => a.id == accountId);
+                              final selectedExists =
+                                  latest.any((a) => a.id == accountId);
                               if (latest.length > previousLength) {
                                 accountId = latest.last.id;
                               } else if (!selectedExists) {
@@ -507,7 +578,8 @@ class TransactionsPage extends ConsumerWidget {
                           labelText: 'Payment method',
                           prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                         ),
-                        onChanged: (value) => setState(() => paymentMethod = value ?? 'Cash'),
+                        onChanged: (value) =>
+                            setState(() => paymentMethod = value ?? 'Cash'),
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -519,50 +591,149 @@ class TransactionsPage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(DateFormat.yMMMd().format(date)),
-                              subtitle: const Text('Transaction date'),
-                              leading: const Icon(Icons.event),
-                              onTap: () async {
-                                final picked = await showDatePicker(
-                                  context: ctx,
-                                  initialDate: date,
-                                  firstDate: DateTime(2000),
-                                  lastDate: DateTime(2100),
-                                );
-                                if (picked != null) {
-                                  setState(() => date = picked);
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.event),
+                        title: Text(DateFormat.yMMMd().format(date)),
+                        subtitle: const Text('Transaction date'),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: ctx,
+                            initialDate: date,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              date = picked;
+                              if (isRecurring) {
+                                final candidate = computeNext(date, frequency);
+                                if (nextOccurrence == null ||
+                                    !nextOccurrence!.isAfter(date)) {
+                                  nextOccurrence = candidate;
+                                  if (!reminderManuallySet) {
+                                    reminderAt = candidate;
+                                  }
                                 }
-                              },
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.edit_calendar),
-                            onPressed: () async {
-                              final picked = await showDatePicker(
-                                context: ctx,
-                                initialDate: date,
-                                firstDate: DateTime(2000),
-                                lastDate: DateTime(2100),
-                              );
-                              if (picked != null) {
-                                setState(() => date = picked);
                               }
-                            },
-                          ),
-                        ],
+                            });
+                          }
+                        },
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Recurring transaction'),
                         value: isRecurring,
-                        onChanged: (value) => setState(() => isRecurring = value),
+                        onChanged: (value) {
+                          setState(() {
+                            isRecurring = value;
+                            if (isRecurring) {
+                              final candidate = computeNext(date, frequency);
+                              nextOccurrence = candidate;
+                              recurrenceError = null;
+                              if (!reminderManuallySet) {
+                                reminderAt = candidate;
+                              }
+                            } else {
+                              nextOccurrence = null;
+                              reminderAt = null;
+                              reminderManuallySet = false;
+                              recurrenceError = null;
+                            }
+                          });
+                        },
                       ),
                       if (isRecurring) ...[
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<RecurrenceFrequency>(
+                          value: frequency,
+                          decoration: const InputDecoration(
+                            labelText: 'Frequency',
+                            prefixIcon: Icon(Icons.autorenew),
+                          ),
+                          items: RecurrenceFrequency.values
+                              .map(
+                                (freq) => DropdownMenuItem(
+                                  value: freq,
+                                  child: Text(freq.label),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              frequency = value;
+                              final candidate = computeNext(date, frequency);
+                              nextOccurrence = candidate;
+                              recurrenceError = null;
+                              if (!reminderManuallySet) {
+                                reminderAt = candidate;
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.event_repeat),
+                          title: Text(
+                            nextOccurrence == null
+                                ? 'Pick next occurrence'
+                                : RecurrenceFrequencyParsing.formatDate(nextOccurrence!),
+                          ),
+                          subtitle: const Text('Next occurrence'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() {
+                                nextOccurrence = null;
+                                recurrenceError = 'Select the next occurrence';
+                              });
+                            },
+                          ),
+                          onTap: () async {
+                            final base = nextOccurrence ?? computeNext(date, frequency);
+                            final pickedDate = await showDatePicker(
+                              context: ctx,
+                              initialDate: base,
+                              firstDate: date,
+                              lastDate: DateTime.now().add(const Duration(days: 730)),
+                            );
+                            if (pickedDate == null) return;
+                            final pickedTime = await showTimePicker(
+                              context: ctx,
+                              initialTime: TimeOfDay.fromDateTime(base),
+                            );
+                            if (pickedTime == null) return;
+                            final candidate = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                            setState(() {
+                              final adjusted = candidate.isAfter(date)
+                                  ? candidate
+                                  : computeNext(date, frequency);
+                              nextOccurrence = adjusted;
+                              recurrenceError = null;
+                              if (!reminderManuallySet) {
+                                reminderAt = adjusted;
+                              }
+                            });
+                          },
+                        ),
+                        if (recurrenceError != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              recurrenceError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 8),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -570,23 +741,27 @@ class TransactionsPage extends ConsumerWidget {
                           title: Text(
                             reminderAt == null
                                 ? 'Add a reminder'
-                                : 'Reminder ${DateFormat.yMMMd().format(reminderAt!)}',
+                                : 'Reminder ${RecurrenceFrequencyParsing.formatDate(reminderAt!)}',
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.clear),
-                            onPressed: () => setState(() => reminderAt = null),
+                            onPressed: () => setState(() {
+                              reminderAt = null;
+                              reminderManuallySet = false;
+                            }),
                           ),
                           onTap: () async {
+                            final initial = reminderAt ?? nextOccurrence ?? date;
                             final pickedDate = await showDatePicker(
                               context: ctx,
-                              initialDate: reminderAt ?? date,
+                              initialDate: initial,
                               firstDate: DateTime.now().subtract(const Duration(days: 1)),
                               lastDate: DateTime.now().add(const Duration(days: 365)),
                             );
                             if (pickedDate == null) return;
                             final pickedTime = await showTimePicker(
                               context: ctx,
-                              initialTime: TimeOfDay.now(),
+                              initialTime: TimeOfDay.fromDateTime(initial),
                             );
                             if (pickedTime == null) return;
                             final reminder = DateTime(
@@ -596,7 +771,10 @@ class TransactionsPage extends ConsumerWidget {
                               pickedTime.hour,
                               pickedTime.minute,
                             );
-                            setState(() => reminderAt = reminder);
+                            setState(() {
+                              reminderAt = reminder;
+                              reminderManuallySet = true;
+                            });
                           },
                         ),
                       ],
@@ -606,19 +784,29 @@ class TransactionsPage extends ConsumerWidget {
                         child: FilledButton(
                           onPressed: () async {
                             if (!formKey.currentState!.validate()) return;
+                            if (isRecurring && nextOccurrence == null) {
+                              setState(() {
+                                recurrenceError = 'Select the next occurrence';
+                              });
+                              return;
+                            }
                             final amount = double.parse(amountCtrl.text);
                             await ref.read(txRepositoryProvider).add(
-                                userId: userId,
-                                type: type,
-                                amount: amount,
-                                accountId: accountId!,
-                                categoryId: categoryId,
-                                note: noteCtrl.text.isEmpty ? null : noteCtrl.text,
-                                paymentMethod: paymentMethod,
-                                isRecurring: isRecurring,
-                                reminderAt: reminderAt,
-                                occurredAt: date,
-                              );
+                                  userId: userId,
+                                  type: type,
+                                  amount: amount,
+                                  accountId: accountId!,
+                                  categoryId: categoryId,
+                                  note: noteCtrl.text.isEmpty ? null : noteCtrl.text,
+                                  paymentMethod: paymentMethod,
+                                  isRecurring: isRecurring,
+                                  reminderAt: isRecurring ? reminderAt : null,
+                                  recurrenceFrequency:
+                                      isRecurring ? frequency.storageValue : null,
+                                  nextOccurrence:
+                                      isRecurring ? nextOccurrence : null,
+                                  occurredAt: date,
+                                );
                             if (context.mounted) Navigator.pop(ctx);
                           },
                           child: const Text('Save transaction'),
@@ -636,6 +824,271 @@ class TransactionsPage extends ConsumerWidget {
 
     amountCtrl.dispose();
     noteCtrl.dispose();
+  }
+
+  Future<void> _openRecurringEditor(
+    BuildContext context,
+    WidgetRef ref,
+    TransactionListItem item,
+  ) async {
+    final transaction = item.transaction;
+    var frequency = RecurrenceFrequencyParsing.fromStorage(
+          transaction.recurrenceFrequency,
+        ) ??
+        RecurrenceFrequency.monthly;
+    DateTime? nextOccurrence =
+        transaction.nextOccurrence ?? frequency.addTo(DateTime.now());
+    DateTime? reminderAt = transaction.reminderAt ?? nextOccurrence;
+    String? recurrenceError;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: StatefulBuilder(
+            builder: (ctx, setState) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Edit schedule',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      item.category?.name ??
+                          (transaction.type == 'income' ? 'Income' : 'Expense'),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<RecurrenceFrequency>(
+                      value: frequency,
+                      decoration: const InputDecoration(
+                        labelText: 'Frequency',
+                        prefixIcon: Icon(Icons.autorenew),
+                      ),
+                      items: RecurrenceFrequency.values
+                          .map(
+                            (freq) => DropdownMenuItem(
+                              value: freq,
+                              child: Text(freq.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          frequency = value;
+                          if (nextOccurrence != null) {
+                            nextOccurrence =
+                                frequency.addTo(nextOccurrence ?? DateTime.now());
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.event_repeat),
+                      title: Text(
+                        nextOccurrence == null
+                            ? 'Pick next occurrence'
+                            : RecurrenceFrequencyParsing.formatDate(nextOccurrence!),
+                      ),
+                      subtitle: const Text('Next occurrence'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          setState(() {
+                            nextOccurrence = null;
+                            recurrenceError = 'Select the next occurrence';
+                          });
+                        },
+                      ),
+                      onTap: () async {
+                        final base = nextOccurrence ?? DateTime.now();
+                        final pickedDate = await showDatePicker(
+                          context: ctx,
+                          initialDate: base,
+                          firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                          lastDate: DateTime.now().add(const Duration(days: 730)),
+                        );
+                        if (pickedDate == null) return;
+                        final pickedTime = await showTimePicker(
+                          context: ctx,
+                          initialTime: TimeOfDay.fromDateTime(base),
+                        );
+                        if (pickedTime == null) return;
+                        final scheduled = DateTime(
+                          pickedDate.year,
+                          pickedDate.month,
+                          pickedDate.day,
+                          pickedTime.hour,
+                          pickedTime.minute,
+                        );
+                        setState(() {
+                          nextOccurrence = scheduled;
+                          recurrenceError = null;
+                        });
+                      },
+                    ),
+                    if (recurrenceError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          recurrenceError!,
+                          style:
+                              TextStyle(color: Theme.of(context).colorScheme.error),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.alarm),
+                      title: Text(
+                        reminderAt == null
+                            ? 'Add a reminder'
+                            : 'Reminder ${RecurrenceFrequencyParsing.formatDate(reminderAt!)}',
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => reminderAt = null),
+                      ),
+                      onTap: () async {
+                        final base = reminderAt ?? nextOccurrence ?? DateTime.now();
+                        final pickedDate = await showDatePicker(
+                          context: ctx,
+                          initialDate: base,
+                          firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (pickedDate == null) return;
+                        final pickedTime = await showTimePicker(
+                          context: ctx,
+                          initialTime: TimeOfDay.fromDateTime(base),
+                        );
+                        if (pickedTime == null) return;
+                        setState(() {
+                          reminderAt = DateTime(
+                            pickedDate.year,
+                            pickedDate.month,
+                            pickedDate.day,
+                            pickedTime.hour,
+                            pickedTime.minute,
+                          );
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () async {
+                          if (nextOccurrence == null) {
+                            setState(() {
+                              recurrenceError = 'Select the next occurrence';
+                            });
+                            return;
+                          }
+                          await ref.read(txRepositoryProvider).updateRecurringTemplate(
+                                transaction,
+                                recurrenceFrequency: frequency.storageValue,
+                                nextOccurrence: nextOccurrence,
+                                reminderAt: reminderAt,
+                              );
+                          if (!context.mounted) return;
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Recurring schedule updated'),
+                            ),
+                          );
+                        },
+                        child: const Text('Save changes'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _toggleRecurringPause(
+    BuildContext context,
+    WidgetRef ref,
+    TransactionListItem item,
+  ) async {
+    final paused = !item.transaction.recurrencePaused;
+    await ref.read(txRepositoryProvider).updateRecurringTemplate(
+          item.transaction,
+          recurrencePaused: paused,
+        );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(paused
+            ? 'Recurring schedule paused'
+            : 'Recurring schedule resumed'),
+      ),
+    );
+  }
+
+  Future<void> _cancelRecurringSchedule(
+    BuildContext context,
+    WidgetRef ref,
+    TransactionListItem item,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Cancel recurring schedule'),
+          content: const Text(
+              'This will stop future occurrences but keep existing transactions.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Cancel schedule'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+    await ref
+        .read(txRepositoryProvider)
+        .cancelRecurringTemplate(item.transaction);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Recurring schedule cancelled')),
+    );
   }
 
   Future<void> _showTransferDialog(BuildContext context, WidgetRef ref, String userId) async {
@@ -1025,6 +1478,177 @@ class _QuickActions extends StatelessWidget {
           onTap: onTransfer,
         ),
       ],
+    );
+  }
+}
+
+class _RecurringTab extends StatelessWidget {
+  const _RecurringTab({
+    required this.itemsAsync,
+    required this.onEdit,
+    required this.onTogglePause,
+    required this.onCancel,
+  });
+
+  final AsyncValue<List<TransactionListItem>> itemsAsync;
+  final void Function(TransactionListItem item) onEdit;
+  final void Function(TransactionListItem item) onTogglePause;
+  final void Function(TransactionListItem item) onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return itemsAsync.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return const _EmptyRecurringState();
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final transaction = item.transaction;
+            final frequency = RecurrenceFrequencyParsing.fromStorage(
+                  transaction.recurrenceFrequency,
+                ) ??
+                RecurrenceFrequency.monthly;
+            final frequencyLabel = frequency.label;
+            final nextLabel = transaction.nextOccurrence == null
+                ? 'Not scheduled'
+                : RecurrenceFrequencyParsing.formatDate(
+                    transaction.nextOccurrence!,
+                  );
+            final reminderLabel = transaction.reminderAt == null
+                ? null
+                : 'Reminder ${RecurrenceFrequencyParsing.formatDate(transaction.reminderAt!)}';
+            final accountLabel = item.account?.name ?? 'Unassigned';
+            final typeColor =
+                transaction.type == 'income' ? Colors.teal : Colors.redAccent;
+            return Card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: typeColor.withOpacity(0.12),
+                      child: Icon(
+                        transaction.type == 'income'
+                            ? Icons.trending_up
+                            : Icons.trending_down,
+                        color: typeColor,
+                      ),
+                    ),
+                    title: Text(
+                      item.category?.name ??
+                          (transaction.type == 'income' ? 'Income' : 'Expense'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$frequencyLabel · Next $nextLabel'),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            Chip(
+                              label: Text(accountLabel),
+                              avatar:
+                                  const Icon(Icons.account_balance, size: 18),
+                            ),
+                            if (transaction.recurrencePaused)
+                              const Chip(
+                                label: Text('Paused'),
+                                avatar: Icon(Icons.pause, size: 18),
+                              ),
+                            if (reminderLabel != null)
+                              Chip(
+                                label: Text(reminderLabel),
+                                avatar: const Icon(Icons.alarm, size: 18),
+                              ),
+                          ],
+                        ),
+                        if ((transaction.note ?? '').isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(transaction.note!),
+                          ),
+                      ],
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => onEdit(item),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => onTogglePause(item),
+                          icon: Icon(transaction.recurrencePaused
+                              ? Icons.play_arrow
+                              : Icons.pause),
+                          label: Text(
+                              transaction.recurrencePaused ? 'Resume' : 'Pause'),
+                        ),
+                        const SizedBox(width: 12),
+                        TextButton.icon(
+                          onPressed: () => onCancel(item),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Cancel'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Could not load recurring schedules: $error'),
+        ),
+      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _EmptyRecurringState extends StatelessWidget {
+  const _EmptyRecurringState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.autorenew,
+              size: 48,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No recurring schedules yet',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Create a recurring transaction to see it here.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -676,6 +676,28 @@ class $TransactionsTable extends Transactions
   late final GeneratedColumn<DateTime> reminderAt = GeneratedColumn<DateTime>(
       'reminder_at', aliasedName, true,
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _recurrenceFrequencyMeta =
+      const VerificationMeta('recurrenceFrequency');
+  @override
+  late final GeneratedColumn<String> recurrenceFrequency =
+      GeneratedColumn<String>('recurrence_frequency', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _nextOccurrenceMeta =
+      const VerificationMeta('nextOccurrence');
+  @override
+  late final GeneratedColumn<DateTime> nextOccurrence =
+      GeneratedColumn<DateTime>('next_occurrence', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _recurrencePausedMeta =
+      const VerificationMeta('recurrencePaused');
+  @override
+  late final GeneratedColumn<bool> recurrencePaused = GeneratedColumn<bool>(
+      'recurrence_paused', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("recurrence_paused" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _occurredAtMeta =
       const VerificationMeta('occurredAt');
   @override
@@ -702,6 +724,9 @@ class $TransactionsTable extends Transactions
         paymentMethod,
         isRecurring,
         reminderAt,
+        recurrenceFrequency,
+        nextOccurrence,
+        recurrencePaused,
         occurredAt,
         createdAt
       ];
@@ -772,6 +797,24 @@ class $TransactionsTable extends Transactions
           reminderAt.isAcceptableOrUnknown(
               data['reminder_at']!, _reminderAtMeta));
     }
+    if (data.containsKey('recurrence_frequency')) {
+      context.handle(
+          _recurrenceFrequencyMeta,
+          recurrenceFrequency.isAcceptableOrUnknown(
+              data['recurrence_frequency']!, _recurrenceFrequencyMeta));
+    }
+    if (data.containsKey('next_occurrence')) {
+      context.handle(
+          _nextOccurrenceMeta,
+          nextOccurrence.isAcceptableOrUnknown(
+              data['next_occurrence']!, _nextOccurrenceMeta));
+    }
+    if (data.containsKey('recurrence_paused')) {
+      context.handle(
+          _recurrencePausedMeta,
+          recurrencePaused.isAcceptableOrUnknown(
+              data['recurrence_paused']!, _recurrencePausedMeta));
+    }
     if (data.containsKey('occurred_at')) {
       context.handle(
           _occurredAtMeta,
@@ -813,6 +856,12 @@ class $TransactionsTable extends Transactions
           .read(DriftSqlType.bool, data['${effectivePrefix}is_recurring'])!,
       reminderAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}reminder_at']),
+      recurrenceFrequency: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}recurrence_frequency']),
+      nextOccurrence: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}next_occurrence']),
+      recurrencePaused: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}recurrence_paused'])!,
       occurredAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}occurred_at'])!,
       createdAt: attachedDatabase.typeMapping
@@ -837,6 +886,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? paymentMethod;
   final bool isRecurring;
   final DateTime? reminderAt;
+  final String? recurrenceFrequency;
+  final DateTime? nextOccurrence;
+  final bool recurrencePaused;
   final DateTime occurredAt;
   final DateTime createdAt;
   const Transaction(
@@ -850,6 +902,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       this.paymentMethod,
       required this.isRecurring,
       this.reminderAt,
+      this.recurrenceFrequency,
+      this.nextOccurrence,
+      required this.recurrencePaused,
       required this.occurredAt,
       required this.createdAt});
   @override
@@ -875,6 +930,13 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || reminderAt != null) {
       map['reminder_at'] = Variable<DateTime>(reminderAt);
     }
+    if (!nullToAbsent || recurrenceFrequency != null) {
+      map['recurrence_frequency'] = Variable<String>(recurrenceFrequency);
+    }
+    if (!nullToAbsent || nextOccurrence != null) {
+      map['next_occurrence'] = Variable<DateTime>(nextOccurrence);
+    }
+    map['recurrence_paused'] = Variable<bool>(recurrencePaused);
     map['occurred_at'] = Variable<DateTime>(occurredAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -900,6 +962,13 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       reminderAt: reminderAt == null && nullToAbsent
           ? const Value.absent()
           : Value(reminderAt),
+      recurrenceFrequency: recurrenceFrequency == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceFrequency),
+      nextOccurrence: nextOccurrence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextOccurrence),
+      recurrencePaused: Value(recurrencePaused),
       occurredAt: Value(occurredAt),
       createdAt: Value(createdAt),
     );
@@ -919,6 +988,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
       isRecurring: serializer.fromJson<bool>(json['isRecurring']),
       reminderAt: serializer.fromJson<DateTime?>(json['reminderAt']),
+      recurrenceFrequency:
+          serializer.fromJson<String?>(json['recurrenceFrequency']),
+      nextOccurrence:
+          serializer.fromJson<DateTime?>(json['nextOccurrence']),
+      recurrencePaused:
+          serializer.fromJson<bool>(json['recurrencePaused'] ?? false),
       occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -937,6 +1012,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'paymentMethod': serializer.toJson<String?>(paymentMethod),
       'isRecurring': serializer.toJson<bool>(isRecurring),
       'reminderAt': serializer.toJson<DateTime?>(reminderAt),
+      'recurrenceFrequency':
+          serializer.toJson<String?>(recurrenceFrequency),
+      'nextOccurrence': serializer.toJson<DateTime?>(nextOccurrence),
+      'recurrencePaused': serializer.toJson<bool>(recurrencePaused),
       'occurredAt': serializer.toJson<DateTime>(occurredAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -953,6 +1032,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           Value<String?> paymentMethod = const Value.absent(),
           bool? isRecurring,
           Value<DateTime?> reminderAt = const Value.absent(),
+          Value<String?> recurrenceFrequency = const Value.absent(),
+          Value<DateTime?> nextOccurrence = const Value.absent(),
+          bool? recurrencePaused,
           DateTime? occurredAt,
           DateTime? createdAt}) =>
       Transaction(
@@ -967,6 +1049,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
             paymentMethod.present ? paymentMethod.value : this.paymentMethod,
         isRecurring: isRecurring ?? this.isRecurring,
         reminderAt: reminderAt.present ? reminderAt.value : this.reminderAt,
+        recurrenceFrequency: recurrenceFrequency.present
+            ? recurrenceFrequency.value
+            : this.recurrenceFrequency,
+        nextOccurrence:
+            nextOccurrence.present ? nextOccurrence.value : this.nextOccurrence,
+        recurrencePaused: recurrencePaused ?? this.recurrencePaused,
         occurredAt: occurredAt ?? this.occurredAt,
         createdAt: createdAt ?? this.createdAt,
       );
@@ -988,6 +1076,15 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           data.isRecurring.present ? data.isRecurring.value : this.isRecurring,
       reminderAt:
           data.reminderAt.present ? data.reminderAt.value : this.reminderAt,
+      recurrenceFrequency: data.recurrenceFrequency.present
+          ? data.recurrenceFrequency.value
+          : this.recurrenceFrequency,
+      nextOccurrence: data.nextOccurrence.present
+          ? data.nextOccurrence.value
+          : this.nextOccurrence,
+      recurrencePaused: data.recurrencePaused.present
+          ? data.recurrencePaused.value
+          : this.recurrencePaused,
       occurredAt:
           data.occurredAt.present ? data.occurredAt.value : this.occurredAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -1007,6 +1104,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('paymentMethod: $paymentMethod, ')
           ..write('isRecurring: $isRecurring, ')
           ..write('reminderAt: $reminderAt, ')
+          ..write('recurrenceFrequency: $recurrenceFrequency, ')
+          ..write('nextOccurrence: $nextOccurrence, ')
+          ..write('recurrencePaused: $recurrencePaused, ')
           ..write('occurredAt: $occurredAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1014,8 +1114,21 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   }
 
   @override
-  int get hashCode => Object.hash(id, userId, categoryId, accountId, type,
-      amount, note, paymentMethod, isRecurring, reminderAt, occurredAt,
+  int get hashCode => Object.hash(
+      id,
+      userId,
+      categoryId,
+      accountId,
+      type,
+      amount,
+      note,
+      paymentMethod,
+      isRecurring,
+      reminderAt,
+      recurrenceFrequency,
+      nextOccurrence,
+      recurrencePaused,
+      occurredAt,
       createdAt);
   @override
   bool operator ==(Object other) =>
@@ -1031,6 +1144,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.paymentMethod == this.paymentMethod &&
           other.isRecurring == this.isRecurring &&
           other.reminderAt == this.reminderAt &&
+          other.recurrenceFrequency == this.recurrenceFrequency &&
+          other.nextOccurrence == this.nextOccurrence &&
+          other.recurrencePaused == this.recurrencePaused &&
           other.occurredAt == this.occurredAt &&
           other.createdAt == this.createdAt);
 }
@@ -1046,6 +1162,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> paymentMethod;
   final Value<bool> isRecurring;
   final Value<DateTime?> reminderAt;
+  final Value<String?> recurrenceFrequency;
+  final Value<DateTime?> nextOccurrence;
+  final Value<bool> recurrencePaused;
   final Value<DateTime> occurredAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -1060,6 +1179,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.paymentMethod = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.reminderAt = const Value.absent(),
+    this.recurrenceFrequency = const Value.absent(),
+    this.nextOccurrence = const Value.absent(),
+    this.recurrencePaused = const Value.absent(),
     this.occurredAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1075,6 +1197,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.paymentMethod = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.reminderAt = const Value.absent(),
+    this.recurrenceFrequency = const Value.absent(),
+    this.nextOccurrence = const Value.absent(),
+    this.recurrencePaused = const Value.absent(),
     required DateTime occurredAt,
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1094,6 +1219,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? paymentMethod,
     Expression<bool>? isRecurring,
     Expression<DateTime>? reminderAt,
+    Expression<String>? recurrenceFrequency,
+    Expression<DateTime>? nextOccurrence,
+    Expression<bool>? recurrencePaused,
     Expression<DateTime>? occurredAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -1109,6 +1237,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (paymentMethod != null) 'payment_method': paymentMethod,
       if (isRecurring != null) 'is_recurring': isRecurring,
       if (reminderAt != null) 'reminder_at': reminderAt,
+      if (recurrenceFrequency != null)
+        'recurrence_frequency': recurrenceFrequency,
+      if (nextOccurrence != null) 'next_occurrence': nextOccurrence,
+      if (recurrencePaused != null) 'recurrence_paused': recurrencePaused,
       if (occurredAt != null) 'occurred_at': occurredAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -1126,6 +1258,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       Value<String?>? paymentMethod,
       Value<bool>? isRecurring,
       Value<DateTime?>? reminderAt,
+      Value<String?>? recurrenceFrequency,
+      Value<DateTime?>? nextOccurrence,
+      Value<bool>? recurrencePaused,
       Value<DateTime>? occurredAt,
       Value<DateTime>? createdAt,
       Value<int>? rowid}) {
@@ -1140,6 +1275,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       isRecurring: isRecurring ?? this.isRecurring,
       reminderAt: reminderAt ?? this.reminderAt,
+      recurrenceFrequency: recurrenceFrequency ?? this.recurrenceFrequency,
+      nextOccurrence: nextOccurrence ?? this.nextOccurrence,
+      recurrencePaused: recurrencePaused ?? this.recurrencePaused,
       occurredAt: occurredAt ?? this.occurredAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -1179,6 +1317,16 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (reminderAt.present) {
       map['reminder_at'] = Variable<DateTime>(reminderAt.value);
     }
+    if (recurrenceFrequency.present) {
+      map['recurrence_frequency'] =
+          Variable<String>(recurrenceFrequency.value);
+    }
+    if (nextOccurrence.present) {
+      map['next_occurrence'] = Variable<DateTime>(nextOccurrence.value);
+    }
+    if (recurrencePaused.present) {
+      map['recurrence_paused'] = Variable<bool>(recurrencePaused.value);
+    }
     if (occurredAt.present) {
       map['occurred_at'] = Variable<DateTime>(occurredAt.value);
     }
@@ -1204,6 +1352,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('paymentMethod: $paymentMethod, ')
           ..write('isRecurring: $isRecurring, ')
           ..write('reminderAt: $reminderAt, ')
+          ..write('recurrenceFrequency: $recurrenceFrequency, ')
+          ..write('nextOccurrence: $nextOccurrence, ')
+          ..write('recurrencePaused: $recurrencePaused, ')
           ..write('occurredAt: $occurredAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -1567,6 +1718,9 @@ typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion
   Value<String?> paymentMethod,
   Value<bool> isRecurring,
   Value<DateTime?> reminderAt,
+  Value<String?> recurrenceFrequency,
+  Value<DateTime?> nextOccurrence,
+  Value<bool> recurrencePaused,
   required DateTime occurredAt,
   Value<DateTime> createdAt,
   Value<int> rowid,
@@ -1582,6 +1736,9 @@ typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
   Value<String?> paymentMethod,
   Value<bool> isRecurring,
   Value<DateTime?> reminderAt,
+  Value<String?> recurrenceFrequency,
+  Value<DateTime?> nextOccurrence,
+  Value<bool> recurrencePaused,
   Value<DateTime> occurredAt,
   Value<DateTime> createdAt,
   Value<int> rowid,
@@ -1622,6 +1779,15 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<DateTime> get reminderAt => $composableBuilder(
       column: $table.reminderAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get recurrenceFrequency => $composableBuilder(
+      column: $table.recurrenceFrequency, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get nextOccurrence => $composableBuilder(
+      column: $table.nextOccurrence, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get recurrencePaused => $composableBuilder(
+      column: $table.recurrencePaused, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get occurredAt => $composableBuilder(
       column: $table.occurredAt, builder: (column) => ColumnFilters(column));
@@ -1667,6 +1833,16 @@ class $$TransactionsTableOrderingComposer
   ColumnOrderings<DateTime> get reminderAt => $composableBuilder(
       column: $table.reminderAt, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get recurrenceFrequency => $composableBuilder(
+      column: $table.recurrenceFrequency,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get nextOccurrence => $composableBuilder(
+      column: $table.nextOccurrence, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get recurrencePaused => $composableBuilder(
+      column: $table.recurrencePaused, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get occurredAt => $composableBuilder(
       column: $table.occurredAt, builder: (column) => ColumnOrderings(column));
 
@@ -1710,6 +1886,15 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<DateTime> get reminderAt => $composableBuilder(
       column: $table.reminderAt, builder: (column) => column);
 
+  GeneratedColumn<String> get recurrenceFrequency => $composableBuilder(
+      column: $table.recurrenceFrequency, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get nextOccurrence => $composableBuilder(
+      column: $table.nextOccurrence, builder: (column) => column);
+
+  GeneratedColumn<bool> get recurrencePaused => $composableBuilder(
+      column: $table.recurrencePaused, builder: (column) => column);
+
   GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
       column: $table.occurredAt, builder: (column) => column);
 
@@ -1752,6 +1937,9 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String?> paymentMethod = const Value.absent(),
             Value<bool> isRecurring = const Value.absent(),
             Value<DateTime?> reminderAt = const Value.absent(),
+            Value<String?> recurrenceFrequency = const Value.absent(),
+            Value<DateTime?> nextOccurrence = const Value.absent(),
+            Value<bool> recurrencePaused = const Value.absent(),
             Value<DateTime> occurredAt = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -1766,6 +1954,9 @@ class $$TransactionsTableTableManager extends RootTableManager<
             paymentMethod: paymentMethod,
             isRecurring: isRecurring,
             reminderAt: reminderAt,
+            recurrenceFrequency: recurrenceFrequency,
+            nextOccurrence: nextOccurrence,
+            recurrencePaused: recurrencePaused,
             occurredAt: occurredAt,
             createdAt: createdAt,
             rowid: rowid,
@@ -1780,6 +1971,9 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String?> paymentMethod = const Value.absent(),
             Value<bool> isRecurring = const Value.absent(),
             Value<DateTime?> reminderAt = const Value.absent(),
+            Value<String?> recurrenceFrequency = const Value.absent(),
+            Value<DateTime?> nextOccurrence = const Value.absent(),
+            Value<bool> recurrencePaused = const Value.absent(),
             required DateTime occurredAt,
             Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -1794,6 +1988,9 @@ class $$TransactionsTableTableManager extends RootTableManager<
             paymentMethod: paymentMethod,
             isRecurring: isRecurring,
             reminderAt: reminderAt,
+            recurrenceFrequency: recurrenceFrequency,
+            nextOccurrence: nextOccurrence,
+            recurrencePaused: recurrencePaused,
             occurredAt: occurredAt,
             createdAt: createdAt,
             rowid: rowid,
