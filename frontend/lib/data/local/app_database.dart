@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift_sqflite/drift_sqflite.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+
+import 'connection/connection.dart';
 
 part 'app_database.g.dart';
 
@@ -34,7 +32,7 @@ class Transactions extends Table {
 
 @DriftDatabase(tables: [Categories, Transactions])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openDB());
+  AppDatabase() : super(openConnection());
 
   @override
   int get schemaVersion => 1;
@@ -67,13 +65,4 @@ class AppDatabase extends _$AppDatabase {
       (delete(transactions)..where((t) => t.id.equals(id))).go();
 
   Future<void> addCategory(CategoriesCompanion data) => into(categories).insert(data);
-}
-
-LazyDatabase _openDB() {
-  return LazyDatabase(() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'app.db'));
-    final sqflite = SqfliteQueryExecutor(path: file.path);
-    return sqflite;
-  });
 }
