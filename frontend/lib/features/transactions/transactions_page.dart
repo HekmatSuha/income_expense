@@ -7,6 +7,8 @@ import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/tx_repository.dart';
 import 'tx_controller.dart';
 
+final homeNavIndexProvider = StateProvider<int>((ref) => 0);
+
 class TransactionsPage extends ConsumerWidget {
   const TransactionsPage({super.key});
 
@@ -14,16 +16,20 @@ class TransactionsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(ensureDefaultCategoriesProvider);
     ref.watch(ensureDefaultAccountsProvider);
-    final txItems = ref.watch(txItemsProvider);
-    final categoriesAsync = ref.watch(categoryStreamProvider);
-    final accountsAsync = ref.watch(accountStreamProvider);
-    final totals = ref.watch(totalsProvider);
-    final budget = ref.watch(monthlyBudgetProvider);
     final userId = ref.watch(currentUserIdProvider);
+    final navIndex = ref.watch(homeNavIndexProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Income & Expense')),
-      floatingActionButton: FloatingActionButton.extended(
+    Widget body;
+    Widget? floatingActionButton;
+
+    if (navIndex == 0) {
+      final txItems = ref.watch(txItemsProvider);
+      final categoriesAsync = ref.watch(categoryStreamProvider);
+      final accountsAsync = ref.watch(accountStreamProvider);
+      final totals = ref.watch(totalsProvider);
+      final budget = ref.watch(monthlyBudgetProvider);
+
+      floatingActionButton = FloatingActionButton.extended(
         onPressed: userId == null
             ? null
             : () async {
@@ -57,8 +63,9 @@ class TransactionsPage extends ConsumerWidget {
               },
         icon: const Icon(Icons.add),
         label: const Text('Add'),
-      ),
-      body: SafeArea(
+      );
+
+      body = SafeArea(
         child: txItems.when(
           data: (items) => CustomScrollView(
             slivers: [
@@ -89,9 +96,9 @@ class TransactionsPage extends ConsumerWidget {
                                   accountsAsync,
                                   'expense',
                                 ),
-                        onAddAccount: userId == null
+                        onTransfer: userId == null
                             ? null
-                            : () => _showAddAccountDialog(context, ref, userId),
+                            : () => _showTransferDialog(context, ref, userId),
                       ),
                       const SizedBox(height: 16),
                       _SummaryRow(totals: totals),
@@ -196,6 +203,64 @@ class TransactionsPage extends ConsumerWidget {
           ),
           loading: () => const Center(child: CircularProgressIndicator()),
         ),
+      );
+    } else {
+      final accountsAsync = ref.watch(accountStreamProvider);
+      floatingActionButton = userId == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showAddAccountDialog(context, ref, userId),
+              icon: const Icon(Icons.add),
+              label: const Text('Add account'),
+            );
+
+      body = SafeArea(
+        child: _AccountsTab(
+          accountsAsync: accountsAsync,
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(navIndex == 0 ? 'Income & Expense' : 'Accounts'),
+      ),
+      body: body,
+      floatingActionButton: floatingActionButton,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: navIndex,
+        onDestinationSelected: (index) async {
+          if (index == 2) {
+            if (userId == null) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Sign in to manage accounts.')),
+                );
+              }
+              return;
+            }
+            await _showAddAccountDialog(context, ref, userId);
+            return;
+          }
+          ref.read(homeNavIndexProvider.notifier).state = index;
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Transactions',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: 'Accounts',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.add_card_outlined),
+            selectedIcon: Icon(Icons.add_card),
+            label: 'Add account',
+          ),
+        ],
       ),
     );
   }
@@ -527,6 +592,233 @@ class TransactionsPage extends ConsumerWidget {
     noteCtrl.dispose();
   }
 
+  Future<void> _showTransferDialog(BuildContext context, WidgetRef ref, String userId) async {
+    final accounts = await ref.read(accountRepositoryProvider).allForUser(userId);
+    if (accounts.length < 2) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Add at least two accounts to record a transfer.')),
+        );
+      }
+      return;
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final amountCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    var fromId = accounts.first.id;
+    var toId = accounts.firstWhere((a) => a.id != fromId).id;
+    DateTime occurredAt = DateTime.now();
+    String? errorMessage;
+    var isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            final destinationAccounts = accounts.where((a) => a.id != fromId).toList();
+            if (!destinationAccounts.any((a) => a.id == toId)) {
+              toId = destinationAccounts.first.id;
+            }
+            return AlertDialog(
+              title: const Text('Transfer between accounts'),
+              content: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: fromId,
+                        decoration: const InputDecoration(
+                          labelText: 'From account',
+                          prefixIcon: Icon(Icons.arrow_upward),
+                        ),
+                        items: accounts
+                            .map(
+                              (a) => DropdownMenuItem(
+                                value: a.id,
+                                child: Text(a.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            fromId = value;
+                            final destinations = accounts.where((a) => a.id != fromId).toList();
+                            if (!destinations.any((a) => a.id == toId)) {
+                              toId = destinations.first.id;
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: toId,
+                        decoration: const InputDecoration(
+                          labelText: 'To account',
+                          prefixIcon: Icon(Icons.arrow_downward),
+                        ),
+                        items: destinationAccounts
+                            .map(
+                              (a) => DropdownMenuItem(
+                                value: a.id,
+                                child: Text(a.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => toId = value);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: amountCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Amount',
+                          prefixIcon: Icon(Icons.payments_outlined),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        validator: (value) {
+                          final amount = double.tryParse(value ?? '');
+                          if (amount == null || amount <= 0) {
+                            return 'Enter a valid amount';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: noteCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Note (optional)',
+                          prefixIcon: Icon(Icons.note_alt_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.event),
+                        title: Text(DateFormat.yMMMd().format(occurredAt)),
+                        subtitle: const Text('Transfer date'),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: dialogContext,
+                            initialDate: occurredAt,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() => occurredAt = picked);
+                          }
+                        },
+                      ),
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            errorMessage!,
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) {
+                            return;
+                          }
+                          if (fromId == toId) {
+                            setState(() {
+                              errorMessage = 'Choose two different accounts.';
+                            });
+                            return;
+                          }
+                          setState(() {
+                            isSaving = true;
+                            errorMessage = null;
+                          });
+                          final fromAccount = accounts.firstWhere((a) => a.id == fromId);
+                          final toAccount = accounts.firstWhere((a) => a.id == toId);
+                          final amount = double.parse(amountCtrl.text);
+                          final note = noteCtrl.text.trim();
+                          final outNote = note.isEmpty
+                              ? 'Transfer to ${toAccount.name}'
+                              : 'Transfer to ${toAccount.name} · $note';
+                          final inNote = note.isEmpty
+                              ? 'Transfer from ${fromAccount.name}'
+                              : 'Transfer from ${fromAccount.name} · $note';
+                          try {
+                            await ref.read(txRepositoryProvider).add(
+                                  userId: userId,
+                                  type: 'expense',
+                                  amount: amount,
+                                  accountId: fromId,
+                                  categoryId: null,
+                                  note: outNote,
+                                  paymentMethod: 'Transfer',
+                                  isRecurring: false,
+                                  reminderAt: null,
+                                  occurredAt: occurredAt,
+                                );
+                            await ref.read(txRepositoryProvider).add(
+                                  userId: userId,
+                                  type: 'income',
+                                  amount: amount,
+                                  accountId: toId,
+                                  categoryId: null,
+                                  note: inNote,
+                                  paymentMethod: 'Transfer',
+                                  isRecurring: false,
+                                  reminderAt: null,
+                                  occurredAt: occurredAt,
+                                );
+                            Navigator.of(dialogContext).pop();
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Transfer recorded.')),
+                            );
+                          } catch (e) {
+                            setState(() {
+                              isSaving = false;
+                              errorMessage = 'Could not save the transfer. Please try again.';
+                            });
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Record transfer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    amountCtrl.dispose();
+    noteCtrl.dispose();
+  }
+
   Future<void> _showAddAccountDialog(BuildContext context, WidgetRef ref, String userId) async {
     const accountTypes = [
       ('Cash', 'cash'),
@@ -655,12 +947,12 @@ class _QuickActions extends StatelessWidget {
   const _QuickActions({
     required this.onAddIncome,
     required this.onAddExpense,
-    required this.onAddAccount,
+    required this.onTransfer,
   });
 
   final VoidCallback? onAddIncome;
   final VoidCallback? onAddExpense;
-  final VoidCallback? onAddAccount;
+  final VoidCallback? onTransfer;
 
   @override
   Widget build(BuildContext context) {
@@ -681,19 +973,125 @@ class _QuickActions extends StatelessWidget {
           onTap: onAddExpense,
         ),
         _ActionChip(
-          label: 'Add account',
-          icon: Icons.account_balance,
+          label: 'Transfer funds',
+          icon: Icons.swap_horiz,
           color: Colors.indigo,
-          onTap: onAddAccount,
-        ),
-        _ActionChip(
-          label: 'Transactions',
-          icon: Icons.list_alt,
-          color: Colors.blueGrey,
-          onTap: null,
+          onTap: onTransfer,
         ),
       ],
     );
+  }
+}
+
+class _AccountsTab extends StatelessWidget {
+  const _AccountsTab({required this.accountsAsync});
+
+  final AsyncValue<List<Account>> accountsAsync;
+
+  @override
+  Widget build(BuildContext context) {
+    return accountsAsync.when(
+      data: (accounts) {
+        if (accounts.isEmpty) {
+          return const _EmptyAccountsState();
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          itemCount: accounts.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final account = accounts[index];
+            final visuals = _AccountVisuals.forType(account.type, Theme.of(context).colorScheme);
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: visuals.color.withOpacity(0.12),
+                  child: Icon(visuals.icon, color: visuals.color),
+                ),
+                title: Text(
+                  account.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text('${_AccountVisuals.labelFor(account.type)} · Added ${DateFormat.yMMMd().format(account.createdAt)}'),
+              ),
+            );
+          },
+        );
+      },
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Could not load accounts: $error'),
+        ),
+      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _EmptyAccountsState extends StatelessWidget {
+  const _EmptyAccountsState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.account_balance_wallet_outlined, size: 48, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 16),
+            Text(
+              'No accounts yet',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Add an account to start tracking balances and transfers.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountVisuals {
+  const _AccountVisuals({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  static _AccountVisuals forType(String type, ColorScheme scheme) {
+    switch (type) {
+      case 'cash':
+        return _AccountVisuals(icon: Icons.payments_outlined, color: scheme.primary);
+      case 'bank':
+        return _AccountVisuals(icon: Icons.account_balance, color: scheme.secondary);
+      case 'credit':
+        return _AccountVisuals(icon: Icons.credit_card, color: scheme.error);
+      case 'investment':
+        return _AccountVisuals(icon: Icons.trending_up, color: scheme.tertiary);
+      default:
+        return _AccountVisuals(icon: Icons.account_balance_wallet, color: scheme.primary);
+    }
+  }
+
+  static String labelFor(String type) {
+    switch (type) {
+      case 'cash':
+        return 'Cash';
+      case 'bank':
+        return 'Bank account';
+      case 'credit':
+        return 'Credit card';
+      case 'investment':
+        return 'Investment';
+      default:
+        return 'Other';
+    }
   }
 }
 
