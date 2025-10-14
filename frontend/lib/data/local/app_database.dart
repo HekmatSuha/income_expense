@@ -99,80 +99,67 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> addCategory(CategoriesCompanion data) => into(categories).insert(data);
 
+  Future<void> updateCategory(
+    String id, {
+    String? name,
+    String? type,
+  }) async {
+    final companion = CategoriesCompanion(
+      name: name == null ? const Value.absent() : Value(name),
+      type: type == null ? const Value.absent() : Value(type),
+    );
+    await (update(categories)..where((c) => c.id.equals(id))).write(companion);
+  }
+
+  Future<void> deleteCategory(String id) =>
+      (delete(categories)..where((c) => c.id.equals(id))).go();
+
+  Future<int> countTransactionsWithCategory(String categoryId) async {
+    final query = select(transactions)..where((t) => t.categoryId.equals(categoryId));
+    final results = await query.get();
+    return results.length;
+  }
+
+  Future<void> reassignTransactionsCategory({
+    required String fromCategoryId,
+    String? toCategoryId,
+  }) async {
+    final updateQuery = update(transactions)
+      ..where((t) => t.categoryId.equals(fromCategoryId));
+    await updateQuery.write(TransactionsCompanion(categoryId: Value(toCategoryId)));
+  }
+
   Future<void> addAccount(AccountsCompanion data) => into(accounts).insert(data);
 
-  Future<void> upsertTransaction(TransactionsCompanion data) =>
-      into(transactions).insertOnConflictUpdate(data);
 
-  Future<void> upsertTransactions(List<TransactionsCompanion> entries) async {
-    if (entries.isEmpty) return;
-    await batch((batch) {
-      batch.insertAllOnConflictUpdate(transactions, entries);
-    });
-  }
-
-  Future<void> purgeTransactions({
-    required String userId,
-    required Set<String> keepIds,
+  Future<void> updateAccount(
+    String id, {
+    String? name,
+    String? type,
   }) async {
-    await (delete(transactions)
-          ..where((t) {
-            final base = t.userId.equals(userId);
-            if (keepIds.isEmpty) {
-              return base;
-            }
-            return base & t.id.isNotIn(keepIds.toList());
-          }))
-        .go();
+    final companion = AccountsCompanion(
+      name: name == null ? const Value.absent() : Value(name),
+      type: type == null ? const Value.absent() : Value(type),
+    );
+    await (update(accounts)..where((a) => a.id.equals(id))).write(companion);
   }
 
-  Future<void> upsertCategory(CategoriesCompanion data) =>
-      into(categories).insertOnConflictUpdate(data);
+  Future<void> deleteAccount(String id) =>
+      (delete(accounts)..where((a) => a.id.equals(id))).go();
 
-  Future<void> upsertCategories(List<CategoriesCompanion> entries) async {
-    if (entries.isEmpty) return;
-    await batch((batch) {
-      batch.insertAllOnConflictUpdate(categories, entries);
-    });
+  Future<int> countTransactionsWithAccount(String accountId) async {
+    final query = select(transactions)..where((t) => t.accountId.equals(accountId));
+    final results = await query.get();
+    return results.length;
   }
 
-  Future<void> purgeCategories({
-    required String userId,
-    required Set<String> keepIds,
+  Future<void> reassignTransactionsAccount({
+    required String fromAccountId,
+    required String toAccountId,
   }) async {
-    await (delete(categories)
-          ..where((c) {
-            final base = c.userId.equals(userId);
-            if (keepIds.isEmpty) {
-              return base;
-            }
-            return base & c.id.isNotIn(keepIds.toList());
-          }))
-        .go();
-  }
+    final updateQuery = update(transactions)
+      ..where((t) => t.accountId.equals(fromAccountId));
+    await updateQuery.write(TransactionsCompanion(accountId: Value(toAccountId)));
 
-  Future<void> upsertAccount(AccountsCompanion data) =>
-      into(accounts).insertOnConflictUpdate(data);
-
-  Future<void> upsertAccounts(List<AccountsCompanion> entries) async {
-    if (entries.isEmpty) return;
-    await batch((batch) {
-      batch.insertAllOnConflictUpdate(accounts, entries);
-    });
-  }
-
-  Future<void> purgeAccounts({
-    required String userId,
-    required Set<String> keepIds,
-  }) async {
-    await (delete(accounts)
-          ..where((a) {
-            final base = a.userId.equals(userId);
-            if (keepIds.isEmpty) {
-              return base;
-            }
-            return base & a.id.isNotIn(keepIds.toList());
-          }))
-        .go();
   }
 }

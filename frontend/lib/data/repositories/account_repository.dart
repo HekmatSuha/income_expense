@@ -37,39 +37,34 @@ class AccountRepository {
 
   Future<List<Account>> allForUser(String userId) => db.allAccountsForUser(userId);
 
-  Future<void> _ensureRemoteSubscription(String userId) async {
-    if (!_shouldSyncRemote(userId)) {
-      await _remoteSubscription?.cancel();
-      _remoteSubscription = null;
-      _activeUserId = null;
-      return;
-    }
-    if (_activeUserId == userId && _remoteSubscription != null) {
-      return;
-    }
-    await _remoteSubscription?.cancel();
-    _activeUserId = userId;
-    _remoteSubscription = remote.watch(userId).listen((records) {
-      _mergeRemoteSnapshot(userId, records);
-    });
+
+  Future<void> update({
+    required String id,
+    String? name,
+    String? type,
+  }) async {
+    await db.updateAccount(id, name: name, type: type);
   }
 
-  Future<void> _mergeRemoteSnapshot(
-    String userId,
-    List<RemoteAccountRecord> records,
-  ) async {
-    final remoteIds = records.map((record) => record.id).toSet();
-    await db.transaction(() async {
-      await db.upsertAccounts(
-        records.map((record) => record.toCompanion()).toList(),
+  Future<void> delete({
+    required String id,
+    String? reassignToAccountId,
+  }) async {
+    final usage = await db.countTransactionsWithAccount(id);
+    if (usage > 0) {
+      if (reassignToAccountId == null) {
+        throw AccountInUseException(usage);
+      }
+      if (reassignToAccountId == id) {
+        throw ArgumentError('Cannot reassign account to itself.');
+      }
+      await db.reassignTransactionsAccount(
+        fromAccountId: id,
+        toAccountId: reassignToAccountId,
       );
-      final keepIds = remoteIds.union(_pendingUpserts);
-      await db.purgeAccounts(userId: userId, keepIds: keepIds);
-    });
-
-    for (final record in records) {
-      _pendingUpserts.remove(record.id);
     }
+    await db.deleteAccount(id);
+
   }
 
   Future<void> add({
@@ -120,6 +115,16 @@ class AccountRepository {
   void dispose() {
     _remoteSubscription?.cancel();
   }
+}
+
+class AccountInUseException implements Exception {
+  AccountInUseException(this.transactionCount);
+
+  final int transactionCount;
+
+  @override
+  String toString() =>
+      'Account cannot be deleted because it is used by $transactionCount transactions';
 }
 
 final accountRepositoryProvider = Provider<AccountRepository>((ref) {
