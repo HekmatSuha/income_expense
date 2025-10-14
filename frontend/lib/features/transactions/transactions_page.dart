@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/local/app_database.dart';
+import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/tx_repository.dart';
 import 'tx_controller.dart';
 
@@ -88,6 +89,9 @@ class TransactionsPage extends ConsumerWidget {
                                   accountsAsync,
                                   'expense',
                                 ),
+                        onAddAccount: userId == null
+                            ? null
+                            : () => _showAddAccountDialog(context, ref, userId),
                       ),
                       const SizedBox(height: 16),
                       _SummaryRow(totals: totals),
@@ -240,7 +244,8 @@ class TransactionsPage extends ConsumerWidget {
     String type = initialType;
     String paymentMethod = 'Cash';
     String? categoryId = categories.where((c) => c.type == type).map((c) => c.id).firstOrNull;
-    String? accountId = accounts.firstOrNull?.id;
+    var availableAccounts = List<Account>.from(accounts);
+    String? accountId = availableAccounts.firstOrNull?.id;
     bool isRecurring = false;
     DateTime date = DateTime.now();
     DateTime? reminderAt;
@@ -258,7 +263,7 @@ class TransactionsPage extends ConsumerWidget {
               if (categoryId == null && filtered.isNotEmpty) {
                 categoryId = filtered.first.id;
               }
-              accountId ??= accounts.firstOrNull?.id;
+              accountId ??= availableAccounts.firstOrNull?.id;
               return Form(
                 key: formKey,
                 child: SingleChildScrollView(
@@ -336,7 +341,7 @@ class TransactionsPage extends ConsumerWidget {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         value: accountId,
-                        items: accounts
+                        items: availableAccounts
                             .map(
                               (a) => DropdownMenuItem(
                                 value: a.id,
@@ -355,6 +360,28 @@ class TransactionsPage extends ConsumerWidget {
                           }
                           return null;
                         },
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            await _showAddAccountDialog(context, ref, userId);
+                            final latest = await ref.read(accountRepositoryProvider).allForUser(userId);
+                            if (!ctx.mounted) return;
+                            final previousLength = availableAccounts.length;
+                            setState(() {
+                              availableAccounts = latest;
+                              final selectedExists = latest.any((a) => a.id == accountId);
+                              if (latest.length > previousLength) {
+                                accountId = latest.last.id;
+                              } else if (!selectedExists) {
+                                accountId = latest.firstOrNull?.id;
+                              }
+                            });
+                          },
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add account'),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
@@ -467,9 +494,9 @@ class TransactionsPage extends ConsumerWidget {
                         width: double.infinity,
                         child: FilledButton(
                           onPressed: () async {
-                          if (!formKey.currentState!.validate()) return;
-                          final amount = double.parse(amountCtrl.text);
-                          await ref.read(txRepositoryProvider).add(
+                            if (!formKey.currentState!.validate()) return;
+                            final amount = double.parse(amountCtrl.text);
+                            await ref.read(txRepositoryProvider).add(
                                 userId: userId,
                                 type: type,
                                 amount: amount,
@@ -499,16 +526,141 @@ class TransactionsPage extends ConsumerWidget {
     amountCtrl.dispose();
     noteCtrl.dispose();
   }
+
+  Future<void> _showAddAccountDialog(BuildContext context, WidgetRef ref, String userId) async {
+    const accountTypes = [
+      ('Cash', 'cash'),
+      ('Bank account', 'bank'),
+      ('Credit card', 'credit'),
+      ('Investment', 'investment'),
+      ('Other', 'other'),
+    ];
+
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    String type = accountTypes.first.$2;
+    String? errorMessage;
+    var isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              title: const Text('Add account'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Account name',
+                        prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Enter an account name';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: type,
+                      items: accountTypes
+                          .map(
+                            (option) => DropdownMenuItem(
+                              value: option.$2,
+                              child: Text(option.$1),
+                            ),
+                          )
+                          .toList(),
+                      decoration: const InputDecoration(
+                        labelText: 'Account type',
+                        prefixIcon: Icon(Icons.layers_outlined),
+                      ),
+                      onChanged: (value) => setState(() => type = value ?? accountTypes.first.$2),
+                    ),
+                    if (errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          errorMessage!,
+                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) {
+                            return;
+                          }
+                          setState(() {
+                            isSaving = true;
+                            errorMessage = null;
+                          });
+                          try {
+                            await ref.read(accountRepositoryProvider).add(
+                                  userId: userId,
+                                  name: nameCtrl.text.trim(),
+                                  type: type,
+                                );
+                            Navigator.of(dialogContext).pop();
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Account added')),
+                            );
+                          } catch (e) {
+                            setState(() {
+                              isSaving = false;
+                              errorMessage = 'Could not add account. Please try again.';
+                            });
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    nameCtrl.dispose();
+  }
 }
 
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
     required this.onAddIncome,
     required this.onAddExpense,
+    required this.onAddAccount,
   });
 
   final VoidCallback? onAddIncome;
   final VoidCallback? onAddExpense;
+  final VoidCallback? onAddAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -529,10 +681,10 @@ class _QuickActions extends StatelessWidget {
           onTap: onAddExpense,
         ),
         _ActionChip(
-          label: 'Transfer',
-          icon: Icons.compare_arrows,
-          color: Colors.orange,
-          onTap: null,
+          label: 'Add account',
+          icon: Icons.account_balance,
+          color: Colors.indigo,
+          onTap: onAddAccount,
         ),
         _ActionChip(
           label: 'Transactions',
