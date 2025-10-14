@@ -186,9 +186,9 @@ class TransactionsPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     String userId,
-    List<Category> categories,
-    {String initialType = 'expense'},
-  ) async {
+    List<Category> categories, {
+    String initialType = 'expense',
+  }) async {
     final formKey = GlobalKey<FormState>();
     final amountCtrl = TextEditingController();
     final noteCtrl = TextEditingController();
