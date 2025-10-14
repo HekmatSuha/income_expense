@@ -422,6 +422,7 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, 1);
     final end = DateTime(now.year, now.month + 1, 0);
@@ -437,6 +438,7 @@ class _DashboardHeader extends StatelessWidget {
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(28),
           bottomRight: Radius.circular(28),
+
         ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
@@ -570,6 +572,7 @@ class _QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     final disabled = onTap == null;
     return InkWell(
       borderRadius: BorderRadius.circular(20),
@@ -608,6 +611,7 @@ class _QuickActionCard extends StatelessWidget {
                   ),
             ),
           ],
+
         ),
       ),
     );
