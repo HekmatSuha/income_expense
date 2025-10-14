@@ -1,19 +1,76 @@
+import 'dart:async';
+
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../local/app_database.dart';
+import '../remote/categories_remote_data_source.dart';
+import '../remote/firebase_service.dart';
 import 'tx_repository.dart' show dbProvider;
 
 class CategoryRepository {
-  CategoryRepository(this.db);
+  CategoryRepository(this._ref, this.db, this.remote);
 
+  final Ref _ref;
   final AppDatabase db;
+  final CategoryRemoteDataSource remote;
 
-  Stream<List<Category>> watch(String userId) =>
-      db.watchCategoriesForUser(userId);
+  StreamSubscription<List<RemoteCategoryRecord>>? _remoteSubscription;
+  String? _activeUserId;
+  final _pendingUpserts = <String>{};
 
-  Future<List<Category>> allForUser(String userId) =>
-      db.allCategoriesForUser(userId);
+  bool _shouldSyncRemote(String userId) {
+    final user = _ref.read(firebaseUserProvider);
+    return user != null && user.uid == userId;
+  }
+
+  Future<void> triggerSync(String userId) async {
+    if (userId.isEmpty) return;
+    await _ensureRemoteSubscription(userId);
+  }
+
+  Stream<List<Category>> watch(String userId) {
+    _ensureRemoteSubscription(userId);
+    return db.watchCategoriesForUser(userId);
+  }
+
+  Future<List<Category>> allForUser(String userId) => db.allCategoriesForUser(userId);
+
+  Future<void> _ensureRemoteSubscription(String userId) async {
+    if (!_shouldSyncRemote(userId)) {
+      await _remoteSubscription?.cancel();
+      _remoteSubscription = null;
+      _activeUserId = null;
+      return;
+    }
+    if (_activeUserId == userId && _remoteSubscription != null) {
+      return;
+    }
+    await _remoteSubscription?.cancel();
+    _activeUserId = userId;
+    _remoteSubscription = remote.watch(userId).listen((records) {
+      _mergeRemoteSnapshot(userId, records);
+    });
+  }
+
+  Future<void> _mergeRemoteSnapshot(
+    String userId,
+    List<RemoteCategoryRecord> records,
+  ) async {
+    final remoteIds = records.map((record) => record.id).toSet();
+    await db.transaction(() async {
+      await db.upsertCategories(
+        records.map((record) => record.toCompanion()).toList(),
+      );
+      final keepIds = remoteIds.union(_pendingUpserts);
+      await db.purgeCategories(userId: userId, keepIds: keepIds);
+    });
+
+    for (final record in records) {
+      _pendingUpserts.remove(record.id);
+    }
+  }
 
   Future<void> update({
     required String id,
@@ -56,14 +113,30 @@ class CategoryRepository {
     required String name,
     required String type,
   }) async {
-    await db.addCategory(
-      CategoriesCompanion.insert(
-        id: const Uuid().v4(),
-        userId: userId,
-        name: name,
-        type: type,
-      ),
+    final id = const Uuid().v4();
+    final now = DateTime.now().toUtc();
+    final companion = CategoriesCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      name: Value(name),
+      type: Value(type),
+      createdAt: Value(now),
     );
+
+    await db.upsertCategory(companion);
+
+    if (_shouldSyncRemote(userId)) {
+      _pendingUpserts.add(id);
+      await remote.upsert(
+        RemoteCategoryRecord(
+          id: id,
+          userId: userId,
+          name: name,
+          type: type,
+          createdAt: now,
+        ),
+      );
+    }
   }
 
   Future<void> ensureDefaults(String userId) async {
@@ -97,6 +170,10 @@ class CategoryRepository {
       }
     }
   }
+
+  void dispose() {
+    _remoteSubscription?.cancel();
+  }
 }
 
 class CategoryInUseException implements Exception {
@@ -111,5 +188,8 @@ class CategoryInUseException implements Exception {
 
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
   final db = ref.watch(dbProvider);
-  return CategoryRepository(db);
+  final remote = ref.watch(categoryRemoteDataSourceProvider);
+  final repo = CategoryRepository(ref, db, remote);
+  ref.onDispose(repo.dispose);
+  return repo;
 });

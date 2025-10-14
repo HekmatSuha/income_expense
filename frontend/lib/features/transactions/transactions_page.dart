@@ -136,7 +136,14 @@ class TransactionsPage extends ConsumerWidget {
                       key: ValueKey(t.id),
                       background: Container(color: Colors.redAccent.withOpacity(0.2)),
                       direction: DismissDirection.endToStart,
-                      onDismissed: (_) => ref.read(txRepositoryProvider).remove(t.id),
+                      onDismissed: (_) {
+                        final uid = userId;
+                        if (uid != null) {
+                          ref
+                              .read(txRepositoryProvider)
+                              .remove(userId: uid, id: t.id);
+                        }
+                      },
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         leading: CircleAvatar(

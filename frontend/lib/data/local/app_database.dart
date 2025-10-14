@@ -131,6 +131,7 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> addAccount(AccountsCompanion data) => into(accounts).insert(data);
 
+
   Future<void> updateAccount(
     String id, {
     String? name,
@@ -159,5 +160,6 @@ class AppDatabase extends _$AppDatabase {
     final updateQuery = update(transactions)
       ..where((t) => t.accountId.equals(fromAccountId));
     await updateQuery.write(TransactionsCompanion(accountId: Value(toAccountId)));
+
   }
 }

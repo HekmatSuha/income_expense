@@ -1,17 +1,42 @@
+import 'dart:async';
+
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../local/app_database.dart';
+import '../remote/accounts_remote_data_source.dart';
+import '../remote/firebase_service.dart';
 import 'tx_repository.dart' show dbProvider;
 
 class AccountRepository {
-  AccountRepository(this.db);
+  AccountRepository(this._ref, this.db, this.remote);
 
+  final Ref _ref;
   final AppDatabase db;
+  final AccountRemoteDataSource remote;
 
-  Stream<List<Account>> watch(String userId) => db.watchAccountsForUser(userId);
+  StreamSubscription<List<RemoteAccountRecord>>? _remoteSubscription;
+  String? _activeUserId;
+  final _pendingUpserts = <String>{};
+
+  bool _shouldSyncRemote(String userId) {
+    final user = _ref.read(firebaseUserProvider);
+    return user != null && user.uid == userId;
+  }
+
+  Future<void> triggerSync(String userId) async {
+    if (userId.isEmpty) return;
+    await _ensureRemoteSubscription(userId);
+  }
+
+  Stream<List<Account>> watch(String userId) {
+    _ensureRemoteSubscription(userId);
+    return db.watchAccountsForUser(userId);
+  }
 
   Future<List<Account>> allForUser(String userId) => db.allAccountsForUser(userId);
+
 
   Future<void> update({
     required String id,
@@ -39,6 +64,7 @@ class AccountRepository {
       );
     }
     await db.deleteAccount(id);
+
   }
 
   Future<void> add({
@@ -46,14 +72,30 @@ class AccountRepository {
     required String name,
     required String type,
   }) async {
-    await db.addAccount(
-      AccountsCompanion.insert(
-        id: const Uuid().v4(),
-        userId: userId,
-        name: name,
-        type: type,
-      ),
+    final id = const Uuid().v4();
+    final now = DateTime.now().toUtc();
+    final companion = AccountsCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      name: Value(name),
+      type: Value(type),
+      createdAt: Value(now),
     );
+
+    await db.upsertAccount(companion);
+
+    if (_shouldSyncRemote(userId)) {
+      _pendingUpserts.add(id);
+      await remote.upsert(
+        RemoteAccountRecord(
+          id: id,
+          userId: userId,
+          name: name,
+          type: type,
+          createdAt: now,
+        ),
+      );
+    }
   }
 
   Future<void> ensureDefaults(String userId) async {
@@ -69,6 +111,10 @@ class AccountRepository {
       await add(userId: userId, name: entry.$1, type: entry.$2);
     }
   }
+
+  void dispose() {
+    _remoteSubscription?.cancel();
+  }
 }
 
 class AccountInUseException implements Exception {
@@ -83,5 +129,8 @@ class AccountInUseException implements Exception {
 
 final accountRepositoryProvider = Provider<AccountRepository>((ref) {
   final db = ref.watch(dbProvider);
-  return AccountRepository(db);
+  final remote = ref.watch(accountRemoteDataSourceProvider);
+  final repo = AccountRepository(ref, db, remote);
+  ref.onDispose(repo.dispose);
+  return repo;
 });
