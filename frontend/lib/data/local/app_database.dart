@@ -14,10 +14,21 @@ class Categories extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+class Accounts extends Table {
+  TextColumn get id => text()(); // uuid
+  TextColumn get userId => text()();
+  TextColumn get name => text()();
+  TextColumn get type => text()(); // 'cash' | 'bank' | 'card' | etc
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 class Transactions extends Table {
   TextColumn get id => text()();
   TextColumn get userId => text()();
   TextColumn get categoryId => text().nullable()();
+  TextColumn get accountId => text().nullable()();
   TextColumn get type => text()(); // 'income' | 'expense'
   RealColumn get amount => real()();
   TextColumn get note => text().nullable()();
@@ -30,12 +41,22 @@ class Transactions extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [Categories, Transactions])
+@DriftDatabase(tables: [Categories, Accounts, Transactions])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (migrator, from, to) async {
+          if (from < 2) {
+            await migrator.createTable(accounts);
+            await migrator.addColumn(transactions, transactions.accountId);
+          }
+        },
+      );
 
   Future<List<Transaction>> allTransactions() => select(transactions).get();
 
@@ -53,8 +74,20 @@ class AppDatabase extends _$AppDatabase {
     return query.watch();
   }
 
+  Stream<List<Account>> watchAccountsForUser(String userId) {
+    final query = select(accounts)
+      ..where((a) => a.userId.equals(userId))
+      ..orderBy([(a) => OrderingTerm.asc(a.createdAt)]);
+    return query.watch();
+  }
+
   Future<List<Category>> allCategoriesForUser(String userId) {
     final query = select(categories)..where((c) => c.userId.equals(userId));
+    return query.get();
+  }
+
+  Future<List<Account>> allAccountsForUser(String userId) {
+    final query = select(accounts)..where((a) => a.userId.equals(userId));
     return query.get();
   }
 
@@ -65,4 +98,6 @@ class AppDatabase extends _$AppDatabase {
       (delete(transactions)..where((t) => t.id.equals(id))).go();
 
   Future<void> addCategory(CategoriesCompanion data) => into(categories).insert(data);
+
+  Future<void> addAccount(AccountsCompanion data) => into(accounts).insert(data);
 }
