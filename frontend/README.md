@@ -38,6 +38,14 @@ Edit `lib/app/secrets.dart` and replace the placeholder values inside `firebaseO
 flutter run -d android    # or -d ios, -d chrome
 ```
 
+### Web builds
+
+The web build depends on [`sql.js`](https://sql.js.org) so that Drift can run
+SQLite in the browser. The Flutter web `index.html` loads the library from the
+jsDelivr CDN and automatically points Drift to the hosted `.wasm` asset. If you
+need to serve the Flutter web build from an offline environment, mirror the
+`sql.js` files yourself and update `web/drift-sqljs-loader.js` accordingly.
+
 ## Features in this starter
 - Email/password auth (Firebase Auth)
 - Add/list income & expense transactions
