@@ -660,42 +660,64 @@ class _QuickActionCard extends StatelessWidget {
 
     final disabled = onTap == null;
     final backgroundColor =
-        disabled ? color.withOpacity(0.12) : color; // Ensure contrast.
-    final borderColor =
-        disabled ? color.withOpacity(0.4) : Colors.transparent;
-    final foregroundColor =
-        disabled ? color.withOpacity(0.9) : Colors.white;
+        disabled ? color.withOpacity(0.75) : color; // Ensure contrast.
+    final circleColor = Colors.white.withOpacity(disabled ? 0.9 : 1);
+    const foregroundColor = Colors.white;
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       onTap: disabled ? null : onTap,
       child: Ink(
         height: 132,
         decoration: BoxDecoration(
           color: backgroundColor,
-          border: Border.all(color: borderColor, width: 2),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
+              color: Colors.black.withOpacity(0.14),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: foregroundColor, size: 34),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: foregroundColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: circleColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  size: 28,
+                  color: disabled ? color.withOpacity(0.7) : color,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Spacer(),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: foregroundColor,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );
