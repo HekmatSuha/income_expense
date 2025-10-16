@@ -32,6 +32,9 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.6
   connectivity_plus: ^6.0.3
+  flutter_local_notifications: ^17.2.1
+  timezone: ^0.9.3
+  flutter_native_timezone_updated_gradle: ^2.0.1
 
 dev_dependencies:
   flutter_test:

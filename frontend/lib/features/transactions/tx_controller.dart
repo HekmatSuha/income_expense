@@ -1,12 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/local/app_database.dart';
+
+import '../../data/local/reminders/reminder_service.dart';
+import '../../data/repositories/category_repository.dart';
+
 import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../data/repositories/tx_repository.dart';
 import '../auth/auth_state.dart';
+
 import '../settings/settings_controller.dart';
+
+import 'recurrence.dart';
+
 
 class Totals {
   final double income;
@@ -93,6 +103,13 @@ final txItemsProvider = Provider<AsyncValue<List<TransactionListItem>>>((ref) {
   return AsyncData(items);
 });
 
+final recurringItemsProvider = Provider<AsyncValue<List<TransactionListItem>>>((ref) {
+  final items = ref.watch(txItemsProvider);
+  return items.whenData(
+    (list) => list.where((item) => item.transaction.isRecurring).toList(),
+  );
+});
+
 final totalsProvider = Provider<Totals>((ref) {
   final txs = ref.watch(txStreamProvider).maybeWhen(data: (d) => d, orElse: () => <Transaction>[]);
   double inc = 0, exp = 0;
@@ -162,3 +179,77 @@ final ensureDefaultAccountsProvider = FutureProvider.autoDispose<void>((ref) asy
   if (userId == null) return;
   await ref.watch(accountRepositoryProvider).ensureDefaults(userId);
 });
+
+final recurringReminderBootstrapperProvider = Provider<void>((ref) {
+  final reminderService = ref.watch(reminderServiceProvider);
+  ref.listen<AsyncValue<List<Transaction>>>(
+    txStreamProvider,
+    (previous, next) {
+      next.whenData((transactions) {
+        final templates = transactions.where((t) => t.isRecurring).toList();
+        unawaited(reminderService.syncRecurringTemplates(templates));
+      });
+    },
+    fireImmediately: true,
+  );
+});
+
+final recurringAutomationProvider = Provider<void>((ref) {
+  var processing = false;
+  ref.listen<AsyncValue<List<Transaction>>>(
+    txStreamProvider,
+    (previous, next) {
+      next.whenData((transactions) {
+        if (processing) return;
+        processing = true;
+        unawaited(() async {
+          try {
+            await _processRecurringTemplates(ref, transactions);
+          } finally {
+            processing = false;
+          }
+        }());
+      });
+    },
+    fireImmediately: true,
+  );
+});
+
+Future<void> _processRecurringTemplates(
+  Ref ref,
+  List<Transaction> transactions,
+) async {
+  final repo = ref.read(txRepositoryProvider);
+  final now = DateTime.now();
+  for (final template in transactions.where((t) => t.isRecurring)) {
+    final frequency =
+        RecurrenceFrequencyParsing.fromStorage(template.recurrenceFrequency);
+    if (frequency == null) continue;
+    if (template.recurrencePaused) continue;
+    if (template.accountId == null) continue;
+    var currentTemplate = template;
+    var nextOccurrence = currentTemplate.nextOccurrence;
+    var iterations = 0;
+    while (nextOccurrence != null && !nextOccurrence.isAfter(now) && iterations < 10) {
+      await repo.add(
+        userId: currentTemplate.userId,
+        type: currentTemplate.type,
+        amount: currentTemplate.amount,
+        accountId: currentTemplate.accountId!,
+        categoryId: currentTemplate.categoryId,
+        note: currentTemplate.note,
+        paymentMethod: currentTemplate.paymentMethod,
+        occurredAt: nextOccurrence,
+      );
+      final newNext = frequency.addTo(nextOccurrence);
+      final newReminder = currentTemplate.reminderAt == null ? null : newNext;
+      currentTemplate = await repo.updateRecurringTemplate(
+        currentTemplate,
+        nextOccurrence: newNext,
+        reminderAt: newReminder,
+      );
+      nextOccurrence = currentTemplate.nextOccurrence;
+      iterations += 1;
+    }
+  }
+}
