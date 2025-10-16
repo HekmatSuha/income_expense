@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/local/app_database.dart';
 import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/tx_repository.dart';
+import '../../data/remote/firebase_service.dart';
+import '../auth/auth_state.dart';
 import 'manage_accounts.dart';
 import 'manage_categories.dart';
 import 'recurrence.dart';
@@ -288,6 +291,7 @@ class TransactionsPage extends ConsumerWidget {
       );
     }
 
+
     String appBarTitle;
     if (navIndex == 0) {
       appBarTitle = 'Income & Expense';
@@ -296,6 +300,7 @@ class TransactionsPage extends ConsumerWidget {
     } else {
       appBarTitle = 'Accounts';
     }
+
 
     return Scaffold(
       appBar: AppBar(
@@ -323,18 +328,47 @@ class TransactionsPage extends ConsumerWidget {
                     ref.invalidate(accountStreamProvider);
                     ref.invalidate(txStreamProvider);
                     break;
+                  case 'settings':
+                    if (context.mounted) {
+                      context.push('/settings');
+                    }
+                    break;
+                  case 'sign_out':
+                    final auth = ref.read(firebaseAuthProvider);
+                    final wasGuest = ref.read(guestModeProvider);
+                    ref.read(guestModeProvider.notifier).state = false;
+                    ref.read(homeNavIndexProvider.notifier).state = 0;
+                    if (!wasGuest) {
+                      await auth.signOut();
+                    }
+                    if (context.mounted) {
+                      context.go('/login');
+                    }
+                    break;
                 }
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'manage_categories',
-                  child: Text('Manage categories'),
-                ),
-                PopupMenuItem(
-                  value: 'manage_accounts',
-                  child: Text('Manage accounts'),
-                ),
-              ],
+              itemBuilder: (context) {
+                return [
+                  const PopupMenuItem(
+                    value: 'manage_categories',
+                    child: Text('Manage categories'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'manage_accounts',
+                    child: Text('Manage accounts'),
+                  ),
+                  if (!guestMode)
+                    const PopupMenuItem(
+                      value: 'settings',
+                      child: Text('Account settings'),
+                    ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'sign_out',
+                    child: Text(guestMode ? 'Exit guest mode' : 'Sign out'),
+                  ),
+                ];
+              },
             ),
         ],
       ),
