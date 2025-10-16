@@ -35,6 +35,9 @@ class Transactions extends Table {
   TextColumn get paymentMethod => text().nullable()();
   BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
   DateTimeColumn get reminderAt => dateTime().nullable()();
+  TextColumn get recurrenceFrequency => text().nullable()();
+  DateTimeColumn get nextOccurrence => dateTime().nullable()();
+  BoolColumn get recurrencePaused => boolean().withDefault(const Constant(false))();
   DateTimeColumn get occurredAt => dateTime()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   @override
@@ -46,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -54,6 +57,20 @@ class AppDatabase extends _$AppDatabase {
           if (from < 2) {
             await migrator.createTable(accounts);
             await migrator.addColumn(transactions, transactions.accountId);
+          }
+          if (from < 3) {
+            await migrator.addColumn(
+              transactions,
+              transactions.recurrenceFrequency,
+            );
+            await migrator.addColumn(
+              transactions,
+              transactions.nextOccurrence,
+            );
+            await migrator.addColumn(
+              transactions,
+              transactions.recurrencePaused,
+            );
           }
         },
       );
@@ -93,6 +110,57 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> addTransaction(TransactionsCompanion data) =>
       into(transactions).insert(data);
+
+  Future<void> upsertTransaction(TransactionsCompanion data) =>
+      into(transactions).insertOnConflictUpdate(data);
+
+  Future<void> upsertTransactions(List<TransactionsCompanion> entries) async {
+    await batch((batch) {
+      batch.insertAllOnConflictUpdate(transactions, entries);
+    });
+  }
+
+  Future<void> purgeTransactions({
+    required String userId,
+    required Set<String> keepIds,
+  }) async {
+    await (delete(transactions)
+          ..where((t) {
+            final base = t.userId.equals(userId);
+            if (keepIds.isEmpty) {
+              return base;
+            }
+            return base & t.id.isNotIn(keepIds.toList());
+          }))
+        .go();
+  }
+
+  Future<void> updateTransactionFields(
+    String id,
+    TransactionsCompanion companion,
+  ) async {
+    await (update(transactions)..where((t) => t.id.equals(id))).write(companion);
+  }
+
+  Future<Transaction?> transactionById(String id) async {
+    final query = select(transactions)..where((t) => t.id.equals(id));
+    return query.getSingleOrNull();
+  }
+
+  Future<List<Transaction>> dueRecurringTemplates({
+    required String userId,
+    required DateTime now,
+  }) {
+    final query = select(transactions)
+      ..where(
+        (t) => t.userId.equals(userId) &
+            t.isRecurring.equals(true) &
+            t.recurrencePaused.equals(false) &
+            t.nextOccurrence.isNotNull() &
+            t.nextOccurrence.isSmallerOrEqualValue(now),
+      );
+    return query.get();
+  }
 
   Future<void> deleteTransaction(String id) =>
       (delete(transactions)..where((t) => t.id.equals(id))).go();
