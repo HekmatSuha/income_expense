@@ -44,7 +44,19 @@ class Transactions extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [Categories, Accounts, Transactions])
+class UserSettings extends Table {
+  TextColumn get userId => text()();
+  TextColumn get currencyCode => text().withDefault(const Constant('USD'))();
+  RealColumn get monthlyBudgetLimit => real().nullable()();
+  RealColumn get annualBudgetLimit => real().nullable()();
+  DateTimeColumn get updatedAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {userId};
+}
+
+@DriftDatabase(tables: [Categories, Accounts, Transactions, UserSettings])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
@@ -59,6 +71,9 @@ class AppDatabase extends _$AppDatabase {
             await migrator.addColumn(transactions, transactions.accountId);
           }
           if (from < 3) {
+
+            await migrator.createTable(userSettings);
+
             await migrator.addColumn(
               transactions,
               transactions.recurrenceFrequency,
@@ -71,6 +86,7 @@ class AppDatabase extends _$AppDatabase {
               transactions,
               transactions.recurrencePaused,
             );
+
           }
         },
       );
@@ -229,5 +245,19 @@ class AppDatabase extends _$AppDatabase {
       ..where((t) => t.accountId.equals(fromAccountId));
     await updateQuery.write(TransactionsCompanion(accountId: Value(toAccountId)));
 
+  }
+
+  Future<UserSetting?> userSettingForUser(String userId) {
+    final query = select(userSettings)..where((s) => s.userId.equals(userId));
+    return query.getSingleOrNull();
+  }
+
+  Stream<UserSetting?> watchUserSettingForUser(String userId) {
+    final query = select(userSettings)..where((s) => s.userId.equals(userId));
+    return query.watchSingleOrNull();
+  }
+
+  Future<void> upsertUserSetting(UserSettingsCompanion data) {
+    return into(userSettings).insertOnConflictUpdate(data);
   }
 }

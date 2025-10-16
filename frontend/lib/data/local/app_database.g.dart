@@ -1151,6 +1151,348 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.createdAt == this.createdAt);
 }
 
+class $UserSettingsTable extends UserSettings
+    with TableInfo<$UserSettingsTable, UserSetting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $UserSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+      'user_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _currencyCodeMeta =
+      const VerificationMeta('currencyCode');
+  @override
+  late final GeneratedColumn<String> currencyCode = GeneratedColumn<String>(
+      'currency_code', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant<String>('USD'));
+  static const VerificationMeta _monthlyBudgetLimitMeta =
+      const VerificationMeta('monthlyBudgetLimit');
+  @override
+  late final GeneratedColumn<double> monthlyBudgetLimit =
+      GeneratedColumn<double>('monthly_budget_limit', aliasedName, true,
+          type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _annualBudgetLimitMeta =
+      const VerificationMeta('annualBudgetLimit');
+  @override
+  late final GeneratedColumn<double> annualBudgetLimit =
+      GeneratedColumn<double>('annual_budget_limit', aliasedName, true,
+          type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [userId, currencyCode, monthlyBudgetLimit, annualBudgetLimit, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'user_settings';
+  @override
+  VerificationContext validateIntegrity(Insertable<UserSetting> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+          _userIdMeta, userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta));
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('currency_code')) {
+      context.handle(
+          _currencyCodeMeta,
+          currencyCode.isAcceptableOrUnknown(
+              data['currency_code']!, _currencyCodeMeta));
+    }
+    if (data.containsKey('monthly_budget_limit')) {
+      context.handle(
+          _monthlyBudgetLimitMeta,
+          monthlyBudgetLimit.isAcceptableOrUnknown(
+              data['monthly_budget_limit']!, _monthlyBudgetLimitMeta));
+    }
+    if (data.containsKey('annual_budget_limit')) {
+      context.handle(
+          _annualBudgetLimitMeta,
+          annualBudgetLimit.isAcceptableOrUnknown(
+              data['annual_budget_limit']!, _annualBudgetLimitMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+          _updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(
+              data['updated_at']!, _updatedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {userId};
+  @override
+  UserSetting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return UserSetting(
+      userId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}user_id'])!,
+      currencyCode: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}currency_code'])!,
+      monthlyBudgetLimit: attachedDatabase.typeMapping.read(
+          DriftSqlType.double, data['${effectivePrefix}monthly_budget_limit']),
+      annualBudgetLimit: attachedDatabase.typeMapping.read(
+          DriftSqlType.double, data['${effectivePrefix}annual_budget_limit']),
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $UserSettingsTable createAlias(String alias) {
+    return $UserSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class UserSetting extends DataClass implements Insertable<UserSetting> {
+  final String userId;
+  final String currencyCode;
+  final double? monthlyBudgetLimit;
+  final double? annualBudgetLimit;
+  final DateTime updatedAt;
+  const UserSetting({
+    required this.userId,
+    required this.currencyCode,
+    this.monthlyBudgetLimit,
+    this.annualBudgetLimit,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
+    map['currency_code'] = Variable<String>(currencyCode);
+    if (!nullToAbsent || monthlyBudgetLimit != null) {
+      map['monthly_budget_limit'] = Variable<double?>(monthlyBudgetLimit);
+    }
+    if (!nullToAbsent || annualBudgetLimit != null) {
+      map['annual_budget_limit'] = Variable<double?>(annualBudgetLimit);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  UserSettingsCompanion toCompanion(bool nullToAbsent) {
+    return UserSettingsCompanion(
+      userId: Value(userId),
+      currencyCode: Value(currencyCode),
+      monthlyBudgetLimit: monthlyBudgetLimit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(monthlyBudgetLimit),
+      annualBudgetLimit: annualBudgetLimit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(annualBudgetLimit),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory UserSetting.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return UserSetting(
+      userId: serializer.fromJson<String>(json['userId']),
+      currencyCode: serializer.fromJson<String>(json['currencyCode']),
+      monthlyBudgetLimit:
+          serializer.fromJson<double?>(json['monthlyBudgetLimit']),
+      annualBudgetLimit:
+          serializer.fromJson<double?>(json['annualBudgetLimit']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
+      'currencyCode': serializer.toJson<String>(currencyCode),
+      'monthlyBudgetLimit': serializer.toJson<double?>(monthlyBudgetLimit),
+      'annualBudgetLimit': serializer.toJson<double?>(annualBudgetLimit),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  UserSetting copyWith({
+    String? userId,
+    String? currencyCode,
+    Value<double?> monthlyBudgetLimit = const Value.absent(),
+    Value<double?> annualBudgetLimit = const Value.absent(),
+    DateTime? updatedAt,
+  }) =>
+      UserSetting(
+        userId: userId ?? this.userId,
+        currencyCode: currencyCode ?? this.currencyCode,
+        monthlyBudgetLimit: monthlyBudgetLimit.present
+            ? monthlyBudgetLimit.value
+            : this.monthlyBudgetLimit,
+        annualBudgetLimit: annualBudgetLimit.present
+            ? annualBudgetLimit.value
+            : this.annualBudgetLimit,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  UserSetting copyWithCompanion(UserSettingsCompanion data) {
+    return UserSetting(
+      userId: data.userId.present ? data.userId.value : userId,
+      currencyCode:
+          data.currencyCode.present ? data.currencyCode.value : currencyCode,
+      monthlyBudgetLimit: data.monthlyBudgetLimit.present
+          ? data.monthlyBudgetLimit.value
+          : monthlyBudgetLimit,
+      annualBudgetLimit: data.annualBudgetLimit.present
+          ? data.annualBudgetLimit.value
+          : annualBudgetLimit,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserSetting(')
+          ..write('userId: $userId, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('monthlyBudgetLimit: $monthlyBudgetLimit, ')
+          ..write('annualBudgetLimit: $annualBudgetLimit, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      userId, currencyCode, monthlyBudgetLimit, annualBudgetLimit, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UserSetting &&
+          other.userId == this.userId &&
+          other.currencyCode == this.currencyCode &&
+          other.monthlyBudgetLimit == this.monthlyBudgetLimit &&
+          other.annualBudgetLimit == this.annualBudgetLimit &&
+          other.updatedAt == this.updatedAt);
+}
+
+class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
+  final Value<String> userId;
+  final Value<String> currencyCode;
+  final Value<double?> monthlyBudgetLimit;
+  final Value<double?> annualBudgetLimit;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const UserSettingsCompanion({
+    this.userId = const Value.absent(),
+    this.currencyCode = const Value.absent(),
+    this.monthlyBudgetLimit = const Value.absent(),
+    this.annualBudgetLimit = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  UserSettingsCompanion.insert({
+    required String userId,
+    Value<String> currencyCode = const Value('USD'),
+    Value<double?> monthlyBudgetLimit = const Value.absent(),
+    Value<double?> annualBudgetLimit = const Value.absent(),
+    Value<DateTime> updatedAt = const Value.absent(),
+    Value<int> rowid = const Value.absent(),
+  })  : userId = Value(userId),
+        currencyCode = currencyCode,
+        monthlyBudgetLimit = monthlyBudgetLimit,
+        annualBudgetLimit = annualBudgetLimit,
+        updatedAt = updatedAt,
+        rowid = rowid;
+  static Insertable<UserSetting> custom({
+    Expression<String>? userId,
+    Expression<String>? currencyCode,
+    Expression<double>? monthlyBudgetLimit,
+    Expression<double>? annualBudgetLimit,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
+      if (currencyCode != null) 'currency_code': currencyCode,
+      if (monthlyBudgetLimit != null)
+        'monthly_budget_limit': monthlyBudgetLimit,
+      if (annualBudgetLimit != null)
+        'annual_budget_limit': annualBudgetLimit,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  UserSettingsCompanion copyWith({
+    Value<String>? userId,
+    Value<String>? currencyCode,
+    Value<double?>? monthlyBudgetLimit,
+    Value<double?>? annualBudgetLimit,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return UserSettingsCompanion(
+      userId: userId ?? this.userId,
+      currencyCode: currencyCode ?? this.currencyCode,
+      monthlyBudgetLimit: monthlyBudgetLimit ?? this.monthlyBudgetLimit,
+      annualBudgetLimit: annualBudgetLimit ?? this.annualBudgetLimit,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (currencyCode.present) {
+      map['currency_code'] = Variable<String>(currencyCode.value);
+    }
+    if (monthlyBudgetLimit.present) {
+      map['monthly_budget_limit'] =
+          Variable<double?>(monthlyBudgetLimit.value);
+    }
+    if (annualBudgetLimit.present) {
+      map['annual_budget_limit'] =
+          Variable<double?>(annualBudgetLimit.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserSettingsCompanion(')
+          ..write('userId: $userId, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('monthlyBudgetLimit: $monthlyBudgetLimit, ')
+          ..write('annualBudgetLimit: $annualBudgetLimit, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String> id;
   final Value<String> userId;
@@ -1369,12 +1711,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $AccountsTable accounts = $AccountsTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
+  late final $UserSettingsTable userSettings = $UserSettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [categories, accounts, transactions];
+      [categories, accounts, transactions, userSettings];
 }
 
 typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
@@ -2018,6 +2361,186 @@ typedef $$TransactionsTableProcessedTableManager = ProcessedTableManager<
     Transaction,
     PrefetchHooks Function()>;
 
+typedef $$UserSettingsTableCreateCompanionBuilder
+    = UserSettingsCompanion Function({
+      required String userId,
+      Value<String> currencyCode,
+      Value<double?> monthlyBudgetLimit,
+      Value<double?> annualBudgetLimit,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$UserSettingsTableUpdateCompanionBuilder
+    = UserSettingsCompanion Function({
+      Value<String> userId,
+      Value<String> currencyCode,
+      Value<double?> monthlyBudgetLimit,
+      Value<double?> annualBudgetLimit,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$UserSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $UserSettingsTable> {
+  $$UserSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get currencyCode => $composableBuilder(
+      column: $table.currencyCode, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get monthlyBudgetLimit => $composableBuilder(
+      column: $table.monthlyBudgetLimit,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get annualBudgetLimit => $composableBuilder(
+      column: $table.annualBudgetLimit,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$UserSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $UserSettingsTable> {
+  $$UserSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get currencyCode => $composableBuilder(
+      column: $table.currencyCode,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get monthlyBudgetLimit => $composableBuilder(
+      column: $table.monthlyBudgetLimit,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get annualBudgetLimit => $composableBuilder(
+      column: $table.annualBudgetLimit,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$UserSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $UserSettingsTable> {
+  $$UserSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get currencyCode => $composableBuilder(
+      column: $table.currencyCode, builder: (column) => column);
+
+  GeneratedColumn<double> get monthlyBudgetLimit => $composableBuilder(
+      column: $table.monthlyBudgetLimit, builder: (column) => column);
+
+  GeneratedColumn<double> get annualBudgetLimit => $composableBuilder(
+      column: $table.annualBudgetLimit, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$UserSettingsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $UserSettingsTable,
+    UserSetting,
+    $$UserSettingsTableFilterComposer,
+    $$UserSettingsTableOrderingComposer,
+    $$UserSettingsTableAnnotationComposer,
+    $$UserSettingsTableCreateCompanionBuilder,
+    $$UserSettingsTableUpdateCompanionBuilder,
+    (
+      UserSetting,
+      BaseReferences<_$AppDatabase, $UserSettingsTable, UserSetting>
+    ),
+    UserSetting,
+    PrefetchHooks Function()> {
+  $$UserSettingsTableTableManager(
+      _$AppDatabase db, $UserSettingsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$UserSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$UserSettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$UserSettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> userId = const Value.absent(),
+            Value<String> currencyCode = const Value.absent(),
+            Value<double?> monthlyBudgetLimit = const Value.absent(),
+            Value<double?> annualBudgetLimit = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              UserSettingsCompanion(
+            userId: userId,
+            currencyCode: currencyCode,
+            monthlyBudgetLimit: monthlyBudgetLimit,
+            annualBudgetLimit: annualBudgetLimit,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String userId,
+            Value<String> currencyCode = const Value('USD'),
+            Value<double?> monthlyBudgetLimit = const Value.absent(),
+            Value<double?> annualBudgetLimit = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              UserSettingsCompanion.insert(
+            userId: userId,
+            currencyCode: currencyCode,
+            monthlyBudgetLimit: monthlyBudgetLimit,
+            annualBudgetLimit: annualBudgetLimit,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$UserSettingsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $UserSettingsTable,
+    UserSetting,
+    $$UserSettingsTableFilterComposer,
+    $$UserSettingsTableOrderingComposer,
+    $$UserSettingsTableAnnotationComposer,
+    $$UserSettingsTableCreateCompanionBuilder,
+    $$UserSettingsTableUpdateCompanionBuilder,
+    (
+      UserSetting,
+      BaseReferences<_$AppDatabase, $UserSettingsTable, UserSetting>
+    ),
+    UserSetting,
+    PrefetchHooks Function()>;
+
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
@@ -2027,4 +2550,6 @@ class $AppDatabaseManager {
       $$AccountsTableTableManager(_db, _db.accounts);
   $$TransactionsTableTableManager get transactions =>
       $$TransactionsTableTableManager(_db, _db.transactions);
+  $$UserSettingsTableTableManager get userSettings =>
+      $$UserSettingsTableTableManager(_db, _db.userSettings);
 }
