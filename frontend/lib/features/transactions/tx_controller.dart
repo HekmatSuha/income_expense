@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/local/app_database.dart';
-import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/account_repository.dart';
+import '../../data/repositories/category_repository.dart';
+import '../../data/repositories/settings_repository.dart';
 import '../../data/repositories/tx_repository.dart';
 import '../auth/auth_state.dart';
+import '../settings/settings_controller.dart';
 
 class Totals {
   final double income;
@@ -105,17 +107,30 @@ final totalsProvider = Provider<Totals>((ref) {
 });
 
 class MonthlyBudgetSummary {
-  const MonthlyBudgetSummary({required this.limit, required this.spent});
+  const MonthlyBudgetSummary({
+    required this.limit,
+    required this.spent,
+    required this.annualSpent,
+    this.annualLimit,
+  });
 
   final double limit;
   final double spent;
+  final double annualSpent;
+  final double? annualLimit;
 
   double get remaining => (limit - spent).clamp(0, limit);
   double get progress => limit == 0 ? 0 : (spent / limit).clamp(0, 1);
+  double get annualProgress =>
+      annualLimit == null || annualLimit == 0 ? 0 : (annualSpent / annualLimit!).clamp(0, 1);
 }
 
 final monthlyBudgetProvider = Provider<MonthlyBudgetSummary>((ref) {
   final txs = ref.watch(txStreamProvider).maybeWhen(data: (d) => d, orElse: () => <Transaction>[]);
+  final settings = ref.watch(userSettingsStreamProvider).maybeWhen(
+        data: (value) => value,
+        orElse: () => UserSettingsRepository.defaultSettings('anonymous'),
+      );
   final now = DateTime.now();
   final spent = txs
       .where((t) =>
@@ -123,10 +138,17 @@ final monthlyBudgetProvider = Provider<MonthlyBudgetSummary>((ref) {
           t.occurredAt.year == now.year &&
           t.occurredAt.month == now.month)
       .fold<double>(0, (prev, t) => prev + t.amount);
+  final annualSpent = txs
+      .where((t) => t.type == 'expense' && t.occurredAt.year == now.year)
+      .fold<double>(0, (prev, t) => prev + t.amount);
 
-  // Default monthly limit; in a production app this would be user-configurable.
-  const limit = 500000.0;
-  return MonthlyBudgetSummary(limit: limit, spent: spent);
+  final limit = settings.monthlyBudgetLimit ?? kDefaultMonthlyBudget;
+  return MonthlyBudgetSummary(
+    limit: limit,
+    spent: spent,
+    annualSpent: annualSpent,
+    annualLimit: settings.annualBudgetLimit,
+  );
 });
 
 final ensureDefaultCategoriesProvider = FutureProvider.autoDispose<void>((ref) async {

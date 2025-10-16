@@ -8,6 +8,7 @@ import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/tx_repository.dart';
 import '../../data/remote/firebase_service.dart';
 import '../auth/auth_state.dart';
+import '../settings/settings_controller.dart';
 import 'manage_accounts.dart';
 import 'manage_categories.dart';
 import 'tx_controller.dart';
@@ -33,6 +34,7 @@ class TransactionsPage extends ConsumerWidget {
       final accountsAsync = ref.watch(accountStreamProvider);
       final totals = ref.watch(totalsProvider);
       final budget = ref.watch(monthlyBudgetProvider);
+      final currencyFormats = ref.watch(currencyFormatsProvider);
 
       floatingActionButton = FloatingActionButton.extended(
         onPressed: userId == null
@@ -106,9 +108,12 @@ class TransactionsPage extends ConsumerWidget {
                             : () => _showTransferDialog(context, ref, userId),
                       ),
                       const SizedBox(height: 16),
-                      _SummaryRow(totals: totals),
+                      _SummaryRow(totals: totals, formats: currencyFormats),
                       const SizedBox(height: 16),
-                      _MonthlyBudgetCard(summary: budget),
+                      _MonthlyBudgetCard(
+                        summary: budget,
+                        formats: currencyFormats,
+                      ),
                       const SizedBox(height: 24),
                       Text(
                         'Recent Transactions',
@@ -198,7 +203,7 @@ class TransactionsPage extends ConsumerWidget {
                           ],
                         ),
                         trailing: Text(
-                          '$sign${NumberFormat('#,##0.00').format(t.amount)}',
+                          '$sign${currencyFormats.regular.format(t.amount.abs())}',
                           style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 16),
                         ),
                       ),
@@ -1216,9 +1221,10 @@ class _ActionChip extends StatelessWidget {
 }
 
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.totals});
+  const _SummaryRow({required this.totals, required this.formats});
 
   final Totals totals;
+  final CurrencyFormats formats;
 
   @override
   Widget build(BuildContext context) {
@@ -1231,6 +1237,7 @@ class _SummaryRow extends StatelessWidget {
             value: totals.income,
             icon: Icons.south_west,
             color: colorScheme.primary,
+            format: formats.regular,
           ),
         ),
         const SizedBox(width: 12),
@@ -1240,6 +1247,7 @@ class _SummaryRow extends StatelessWidget {
             value: totals.expense,
             icon: Icons.north_east,
             color: colorScheme.error,
+            format: formats.regular,
           ),
         ),
         const SizedBox(width: 12),
@@ -1249,6 +1257,7 @@ class _SummaryRow extends StatelessWidget {
             value: totals.balance,
             icon: Icons.account_balance_wallet,
             color: colorScheme.secondary,
+            format: formats.regular,
           ),
         ),
       ],
@@ -1262,12 +1271,14 @@ class _SummaryCard extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
+    required this.format,
   });
 
   final String title;
   final double value;
   final IconData icon;
   final Color color;
+  final NumberFormat format;
 
   @override
   Widget build(BuildContext context) {
@@ -1285,7 +1296,7 @@ class _SummaryCard extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 6),
           Text(
-            NumberFormat.simpleCurrency(name: 'KZT').format(value),
+            format.format(value),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ],
@@ -1295,9 +1306,10 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _MonthlyBudgetCard extends StatelessWidget {
-  const _MonthlyBudgetCard({required this.summary});
+  const _MonthlyBudgetCard({required this.summary, required this.formats});
 
   final MonthlyBudgetSummary summary;
+  final CurrencyFormats formats;
 
   @override
   Widget build(BuildContext context) {
@@ -1325,21 +1337,50 @@ class _MonthlyBudgetCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Spent: ${NumberFormat.compactCurrency(symbol: '₸').format(summary.spent)}',
+                  'Spent: ${formats.compact.format(summary.spent)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
               Text(
-                'Limit: ${NumberFormat.compactCurrency(symbol: '₸').format(summary.limit)}',
+                'Limit: ${formats.compact.format(summary.limit)}',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'Remaining ${NumberFormat.compactCurrency(symbol: '₸').format(summary.remaining)}',
+            'Remaining ${formats.compact.format(summary.remaining)}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (summary.annualLimit != null && summary.annualLimit! > 0) ...[
+            const SizedBox(height: 20),
+            Text(
+              'Annual progress',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: summary.annualProgress,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(12),
+              backgroundColor: colorScheme.onPrimaryContainer.withOpacity(0.12),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Spent: ${formats.compact.format(summary.annualSpent)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                Text(
+                  'Target: ${formats.compact.format(summary.annualLimit!)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
